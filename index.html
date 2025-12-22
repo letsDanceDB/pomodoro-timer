@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  
+  <title>Pomodoro Timer for Deep Work | Focus Timer</title>
+  <meta name="description"
+        content="Free minimal Pomodoro Timer for deep work. Start focused work sessions with simple breaks, track sets, and stay productive directly in your browser." />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Minimal Pomodoro Timer",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web",
+    "description": "Free minimal Pomodoro Timer for deep work and focus directly in your browser.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0.00",
+      "priceCurrency": "EUR"
+    }
+  }
+  </script>
+  
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%0A%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22central%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%3E%F0%9F%8D%85%3C/text%3E%0A%3C/svg%3E" />
+
+</head>
+
+<body>
+  <canvas id="snow-canvas"></canvas>
+  <header class="app-header">
+    <h1 class="sr-only">Minimal Pomodoro Timer for Deep Work and Focus</h1>
+  </header>
+  <main>
+    <section aria-label="Pomodoro focus timer">
+        
+  <div id="root">
+    <div id="timer-container" class="timer-container">
+      <button id="settings-button" type="button" class="settings-button settings-icon-btn" title="Settings">⚙</button>
+      <button id="back-from-settings-button" type="button" class="phase-back-btn">← Back</button>
+      <div id="ripple"></div>
+      <div id="circle-outer" class="circle-outer">
+        <div id="flip-wrapper" class="flip-wrapper">
+          <svg viewBox="0 0 300 300" class="timer-svg">
+            <defs>
+              <linearGradient id="grad0" x1="270.00" y1="150.00" x2="241.93" y2="227.13" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#c0c0c0" />
+                <stop offset="100%" stop-color="#fdfdfd" />
+              </linearGradient>
+              <linearGradient id="grad1" x1="241.93" y1="227.13" x2="170.84" y2="268.18" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#000000" />
+                <stop offset="100%" stop-color="#222222" />
+              </linearGradient>
+              <linearGradient id="grad2" x1="170.84" y1="268.18" x2="90.00" y2="253.92" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#1e90ff" />
+                <stop offset="100%" stop-color="#cfe2ff" />
+              </linearGradient>
+              <linearGradient id="grad3" x1="90.00" y1="253.92" x2="37.24" y2="191.04" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#2ecc71" />
+                <stop offset="100%" stop-color="#c9f7dd" />
+              </linearGradient>
+              <linearGradient id="grad4" x1="37.24" y1="191.04" x2="37.24" y2="108.96" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#f1c40f" />
+                <stop offset="100%" stop-color="#fbeeb0" />
+              </linearGradient>
+              <linearGradient id="grad5" x1="37.24" y1="108.96" x2="90.00" y2="46.08" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#e67e22" />
+                <stop offset="100%" stop-color="#f6c89a" />
+              </linearGradient>
+              <linearGradient id="grad6" x1="90.00" y1="46.08" x2="170.84" y2="31.82" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#9b59b6" />
+                <stop offset="100%" stop-color="#e4c7f3" />
+              </linearGradient>
+              <linearGradient id="grad7" x1="170.84" y1="31.82" x2="241.93" y2="72.87" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ff6b81" />
+                <stop offset="100%" stop-color="#ffd4dc" />
+              </linearGradient>
+              <linearGradient id="grad8" x1="241.93" y1="72.87" x2="270.00" y2="150.00" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#16a085" />
+                <stop offset="100%" stop-color="#9fe8d6" />
+              </linearGradient>
+                          <radialGradient id="inner-longbreak-gradient" cx="50%" cy="0%" r="100%">
+                <stop offset="0%" stop-color="#1c3b70" />
+                <stop offset="60%" stop-color="#050819" />
+                <stop offset="100%" stop-color="#02040c" />
+              </radialGradient>
+            </defs>
+            <circle id="inner-fill" cx="150" cy="150" r="120" fill="transparent"></circle>
+            <g id="palette-group">
+              <path class="palette-segment" data-index="0" data-light="#fdfdfd" data-dark="#c0c0c0" data-start="0" data-end="40" d="M 150,150 L 270.00,150.00 A 120,120 0 0 1 241.93,227.13 Z" fill="url(#grad0)"></path>
+              <path class="palette-segment" data-index="1" data-light="#222222" data-dark="#000000" data-start="40" data-end="80" d="M 150,150 L 241.93,227.13 A 120,120 0 0 1 170.84,268.18 Z" fill="url(#grad1)"></path>
+              <path class="palette-segment" data-index="2" data-light="#cfe2ff" data-dark="#1e90ff" data-start="80" data-end="120" d="M 150,150 L 170.84,268.18 A 120,120 0 0 1 90.00,253.92 Z" fill="url(#grad2)"></path>
+              <path class="palette-segment" data-index="3" data-light="#c9f7dd" data-dark="#2ecc71" data-start="120" data-end="160" d="M 150,150 L 90.00,253.92 A 120,120 0 0 1 37.24,191.04 Z" fill="url(#grad3)"></path>
+              <path class="palette-segment" data-index="4" data-light="#fbeeb0" data-dark="#f1c40f" data-start="160" data-end="200" d="M 150,150 L 37.24,191.04 A 120,120 0 0 1 37.24,108.96 Z" fill="url(#grad4)"></path>
+              <path class="palette-segment" data-index="5" data-light="#f6c89a" data-dark="#e67e22" data-start="200" data-end="240" d="M 150,150 L 37.24,108.96 A 120,120 0 0 1 90.00,46.08 Z" fill="url(#grad5)"></path>
+              <path class="palette-segment" data-index="6" data-light="#e4c7f3" data-dark="#9b59b6" data-start="240" data-end="280" d="M 150,150 L 90.00,46.08 A 120,120 0 0 1 170.84,31.82 Z" fill="url(#grad6)"></path>
+              <path class="palette-segment" data-index="7" data-light="#ffd4dc" data-dark="#ff6b81" data-start="280" data-end="320" d="M 150,150 L 170.84,31.82 A 120,120 0 0 1 241.93,72.87 Z" fill="url(#grad7)"></path>
+              <path class="palette-segment" data-index="8" data-light="#9fe8d6" data-dark="#16a085" data-start="320" data-end="360" d="M 150,150 L 241.93,72.87 A 120,120 0 0 1 270.00,150.00 Z" fill="url(#grad8)"></path>
+            </g>
+            <circle id="bg-circle" cx="150" cy="150" r="125" stroke="#3d4150" stroke-width="20" fill="none"></circle>
+            <circle
+              id="progress-circle"
+              cx="150"
+              cy="150"
+              r="125"
+              stroke="#9fb4ff"
+              stroke-width="20"
+              fill="none"
+              stroke-linecap="round"
+              transform="rotate(-90 150 150)"
+            ></circle>
+            <circle
+              id="duration-handle"
+              cx="150"
+              cy="15"
+              r="7"
+              fill="#ffffff"
+              stroke="#000000"
+              stroke-width="2"
+            ></circle>
+          </svg>
+        </div>
+      </div>
+      <button id="next-button" class="next-button" type="button" title="Next (Break)" aria-label="Next phase">
+        <svg class="MuiSvgIcon-root swipe-next-icon" xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 120 24" aria-hidden="true" focusable="false">
+          <defs>
+            <path id="chevron-shape"
+                  d="M0 2 L8 12 L0 22 L3 22 L11 12 L3 2 Z" />
+          </defs>
+          <use href="#chevron-shape" x="0"  fill="#ffffff" opacity="0.12" />
+          <use href="#chevron-shape" x="10" fill="#d0d0d0" opacity="0.25" />
+          <use href="#chevron-shape" x="20" fill="#b0b0b0" opacity="0.38" />
+          <use href="#chevron-shape" x="30" fill="#909090" opacity="0.52" />
+          <use href="#chevron-shape" x="40" fill="#707070" opacity="0.66" />
+          <use href="#chevron-shape" x="50" fill="#505050" opacity="0.80" />
+          <use href="#chevron-shape" x="60" fill="#303030" opacity="0.92" />
+          <use href="#chevron-shape" x="70" fill="#000000" opacity="1.0" />
+        </svg>
+      </button>
+      <div id="time-overlay" class="time-overlay">
+      <div id="time-main" class="time-main">25:00</div>
+      <div class="phase-footer">
+        <div class="phase-header-row">
+          <div id="phase-label" class="phase-label">Work</div>
+        </div>
+        <button id="sound-toggle" type="button" class="sound-toggle" title="Sound on/off">
+        <span class="sound-icon sound-icon-on">
+<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M19 6C20.5 7.5 21 10 21 12C21 14 20.5 16.5 19 18M16 8.99998C16.5 9.49998 17 10.5 17 12C17 13.5 16.5 14.5 16 15M3 10.5V13.5C3 14.6046 3.5 15.5 5.5 16C7.5 16.5 9 21 12 21C14 21 14 3 12 3C9 3 7.5 7.5 5.5 8C3.5 8.5 3 9.39543 3 10.5Z" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+        </span>
+        <span class="sound-icon sound-icon-off">
+<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M10.6 5L13 3V8M3 3L21 21M13 18V21L7 16H5C3.89543 16 3 15.1046 3 14V10C3 9.63571 3.09739 9.29417 3.26756 9" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+        </span>
+      </button>
+      </div>
+    </div>
+<div id="slider-tooltip" class="slider-tooltip">Drag to set time</div>
+<div id="helper-text" class="helper-text">
+      Click time to start/pause • Double-click time to reset
+    </div>
+
+    <div class="focus-dots">
+      <span class="focus-dot"></span>
+      <span class="focus-dot"></span>
+      <span class="focus-dot"></span>
+      <span class="focus-dot"></span>
+    </div>
+
+    <div id="phase-settings-buttons" class="phase-settings-buttons">
+      <button type="button" class="phase-color-btn active" data-phase="work">Work</button>
+      <button type="button" class="phase-color-btn" data-phase="break">Break</button>
+      <button type="button" class="phase-color-btn" data-phase="longBreak">Long break</button>
+    </div>
+
+      </div>
+
+  <div id="milestone-modal" class="milestone-modal">
+    <div class="milestone-modal-content">
+      <div class="milestone-modal-title">Good job!</div>
+      <div class="milestone-modal-text">
+        You have done a set, you can start again from the beginning.
+      </div>
+      <div id="work-summary" class="summary-text">
+      Working session finished: 0 &bull; skipped: 0 &bull; not completed: 0
+    </div>
+      <button id="milestone-ok-btn" class="milestone-modal-ok" type="button">OK</button>
+    </div>
+  </div>
+
+
+  <div id="feedback-modal" class="feedback-modal">
+    <div class="feedback-modal-content">
+      <button type="button" id="feedback-close-btn" class="feedback-close-btn" aria-label="Close">×</button>
+      <div class="feedback-modal-title">Quick feedback</div>
+      <div class="feedback-modal-text">
+        Help us improve the app
+      </div>
+      <div class="feedback-question">
+        <span>Do you need a mobile app (iOS / Android)?</span>
+        <div class="feedback-options">
+          <button type="button" class="feedback-btn" data-question="mobile_app" data-answer="yes">👍</button>
+          <button type="button" class="feedback-btn" data-question="mobile_app" data-answer="no">👎</button>
+        </div>
+      </div>
+      <div class="feedback-question">
+        <span>Do you need statistics to download?</span>
+        <div class="feedback-options">
+          <button type="button" class="feedback-btn" data-question="download_stats" data-answer="yes">👍</button>
+          <button type="button" class="feedback-btn" data-question="download_stats" data-answer="no">👎</button>
+        </div>
+      </div>
+      <button id="feedback-skip-btn" class="feedback-skip-btn" type="button">Skip for now</button>
+    </div>
+  </div>
+  
+  <audio id="switch-sound" src="assets/sounds/break_sound.mp3" preload="auto"></audio>
+  <audio id="skip-sound" src="assets/sounds/next.mp3" preload="auto"></audio>
+  <audio id="settings-sound" src="assets/sounds/focus_wind_gust.mp3" preload="auto"></audio>
+  <audio id="combo-sound" src="assets/sounds/ui_flip_spin_blip_gliss.wav" preload="auto"></audio>
+  <audio id="work-sound" src="assets/sounds/pomodoro_switch_beep.wav" preload="auto"></audio>
+  <audio id="work-pause-sound" src="assets/sounds/pomodoro_pause.mp3" preload="auto"></audio>
+    </section>
+  </main>
+  <script src="js/app.js"></script>
+</body>
+</html>
