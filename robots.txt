@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://focus-timer-xo7iv.ondigitalocean.app/
+Sitemap: https://focus-timer-xo7iv.ondigitalocean.app/sitemap.xml
+

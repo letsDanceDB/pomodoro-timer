@@ -67,27 +67,50 @@ class AudioManager {
     this.breakSound = breakSound || null;
     this.comboSound = comboSound || null;
     this.workPauseSound = workPauseSound || null;
+
+    // Token to cancel overlapping rapid plays (fast Next/phase switches)
+    this._playToken = 0;
   }
-  playWorkStart() {
-    safePlayAudio(this.workSound);
-  }
-  playBreakStart() {
-    safePlayAudio(this.breakSound);
-  }
-  playCombo() {
-    safePlayAudio(this.comboSound);
-  }
-  playWorkPause() {
-    safePlayAudio(this.workPauseSound);
-  }
+
   stopAll() {
-    [this.workSound, this.breakSound].forEach((snd) => {
-      if (!snd) return;
-      try {
-        snd.pause();
-        snd.currentTime = 0;
-      } catch (_) {}
-    });
+    const list = [this.workSound, this.breakSound, this.comboSound, this.workPauseSound].filter(Boolean);
+    for (const snd of list) {
+      try { snd.pause(); } catch (_) {}
+      try { snd.currentTime = 0; } catch (_) {}
+    }
+    // invalidate any in-flight play
+    this._playToken++;
+  }
+
+  playWorkStart() { this._safePlay(this.workSound); }
+  playBreakStart() { this._safePlay(this.breakSound); }
+  playCombo() { this._safePlay(this.comboSound); }
+  playWorkPause() { this._safePlay(this.workPauseSound); }
+
+  // Phase mapping used by applyEffects()
+  playPhase(phaseType) {
+    if (phaseType === 'work') return this.playWorkStart();
+    // treat both 'break' and 'longBreak' as break-start sound (you can swap if you add a separate long break sound)
+    if (phaseType === 'break' || phaseType === 'longBreak') return this.playBreakStart();
+  }
+
+  _safePlay(soundElement) {
+    if (!soundElement) return;
+    if (typeof soundEnabled !== 'undefined' && !soundEnabled) return;
+
+    const token = ++this._playToken;
+    try {
+      soundElement.currentTime = 0;
+      const p = soundElement.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          // If user triggered a new sound while this was starting, stop this one.
+          if (token !== this._playToken) {
+            try { soundElement.pause(); soundElement.currentTime = 0; } catch (_) {}
+          }
+        }).catch(() => {});
+      }
+    } catch (_) {}
   }
 }
 
@@ -182,12 +205,12 @@ const feedbackAnswers = {
   download_stats: null
 };
 
-function logAnalyticsEvent(name, payload) {
+function logAnalyticsEvent(name, params = {}) {
+  // Safe no-op if GA isn't loaded (never break the app)
+  if (typeof window.gtag !== 'function') return;
   try {
-    console.log('[GA mock]', name, payload || {});
-  } catch (e) {
-    // no-op if console is unavailable
-  }
+    window.gtag('event', name, params || {});
+  } catch (_) {}
 }
 
 function getFeedbackState() {
@@ -350,6 +373,8 @@ function playWorkPause() {
 
 
 let soundEnabled = true;
+// Centralize phase/pause audio via applyEffects() (deterministic audio rules)
+const AUDIO_EFFECTS_MODE = true;
 
 const soundToggle = document.getElementById('sound-toggle');
 if (soundToggle) {
@@ -824,8 +849,7 @@ function startTimer() {
   // - Auto-start after a phase switch already played a transition sound in moveToNextPhase, so suppress it here.
   const isResume = targetTimestamp != null && remaining > 0 && remaining < totalSeconds;
   const isWorkResume = userPausedWork && currentPhase.type === 'work' && isResume;
-
-  if (soundEnabled) {
+  if (!AUDIO_EFFECTS_MODE && soundEnabled) {
     if (isWorkResume) {
       playWorkSound();
     } else if (!isResume && !suppressNextStartSound) {
@@ -883,7 +907,7 @@ function startTimer() {
       clearInterval(intervalId);
       intervalId = null;
       isRunning = false;
-      moveToNextPhase(true, true);
+      dispatch({ type: 'COMPLETE' });
       return;
     }
 
@@ -1151,7 +1175,7 @@ function moveToNextPhase(autoStart, completed) {
   updateFocusDots(prevPhaseType);
 
   // Play transition sounds only if previous phase was running (autoStart)
-  if (autoStart && soundEnabled) {
+  if (!AUDIO_EFFECTS_MODE && autoStart && soundEnabled) {
     if (prevPhaseType === 'work' && (newPhaseType === 'break' || newPhaseType === 'longBreak')) {
       playBreakSound();
     } else if ((prevPhaseType === 'break' || prevPhaseType === 'longBreak') && newPhaseType === 'work') {
@@ -1171,7 +1195,163 @@ function moveToNextPhase(autoStart, completed) {
   }
 }
 
-function handleSingleClick() {
+
+// -------------------- State machine core (transition + dispatch + effects) --------------------
+const MODEL = {
+  status: 'paused',      // 'running' | 'paused'
+  phaseIndex: 0,
+  settingsOpen: false,
+  milestonePendingReset: false,
+  userPausedWork: false,
+};
+
+function syncModelFromGlobals() {
+  MODEL.status = isRunning ? 'running' : 'paused';
+  MODEL.phaseIndex = currentPhaseIndex;
+  MODEL.settingsOpen = !!settingsOpen;
+  MODEL.milestonePendingReset = !!milestonePendingReset;
+  MODEL.userPausedWork = !!userPausedWork;
+}
+
+function transition(prev, event) {
+  // Pure computation of next model + declarative effects (no DOM/audio here)
+  const next = { ...prev };
+  const effects = [];
+
+  switch (event.type) {
+    case 'START':
+      if (prev.status === 'running' || prev.settingsOpen || prev.milestonePendingReset) return { next: prev, effects };
+      next.status = 'running';
+      effects.push({ type: 'AUDIO_ON_START' });
+      return { next, effects };
+
+    case 'PAUSE':
+      if (prev.status !== 'running') return { next: prev, effects };
+      next.status = 'paused';
+      // mark that user paused during work for resume sound logic
+      next.userPausedWork = (currentPhase && currentPhase.type === 'work');
+      effects.push({ type: 'AUDIO_ON_PAUSE' });
+      return { next, effects };
+
+    case 'TOGGLE':
+      return prev.status === 'running'
+        ? transition(prev, { type: 'PAUSE' })
+        : transition(prev, { type: 'START' });
+
+    case 'NEXT': {
+      // NEXT is a phase transition. We let existing moveToNextPhase() update globals/counters/UI.
+      // We still define the audio effect here.
+      effects.push({ type: 'AUDIO_ON_PHASE_SWITCH', autoStart: !!event.autoStart });
+      // phaseIndex will be synced from globals after moveToNextPhase runs
+      return { next, effects };
+    }
+
+    case 'COMPLETE': {
+      effects.push({ type: 'AUDIO_ON_PHASE_SWITCH', autoStart: true });
+      return { next, effects };
+    }
+
+    case 'RESET':
+      effects.push({ type: 'AUDIO_STOP_ALL' });
+      return { next, effects };
+
+    case 'SETTINGS_OPEN':
+      next.settingsOpen = true;
+      effects.push({ type: 'AUDIO_STOP_ALL' });
+      return { next, effects };
+
+    case 'SETTINGS_CLOSE':
+      next.settingsOpen = false;
+      return { next, effects };
+
+    default:
+      return { next: prev, effects };
+  }
+}
+
+function render(prev, next) {
+  // Keep render thin: existing functions already update DOM.
+  // Here we only ensure model->global sync if needed in future.
+}
+
+function applyEffects(prev, next, effects) {
+  if (!audioManager) return;
+
+  for (const eff of effects) {
+    if (eff.type === 'AUDIO_STOP_ALL') {
+      audioManager.stopAll();
+      continue;
+    }
+
+    if (eff.type === 'AUDIO_ON_PAUSE') {
+      // Always stop phase audio on pause.
+      audioManager.stopAll();
+      // Pause sound only for work phase.
+      if (soundEnabled && currentPhase && currentPhase.type === 'work') {
+        audioManager.playWorkPause();
+      }
+      continue;
+    }
+
+    if (eff.type === 'AUDIO_ON_START') {
+      // Starting/resuming running: stop anything stale, then play phase start.
+      audioManager.stopAll();
+      if (!soundEnabled) continue;
+
+      // If user paused during work and resumes work => replay work start.
+      const shouldReplayWork = (prev.userPausedWork && currentPhase && currentPhase.type === 'work');
+      if (shouldReplayWork) {
+        audioManager.playWorkStart();
+      } else {
+        audioManager.playPhase(currentPhase ? currentPhase.type : 'work');
+      }
+      continue;
+    }
+
+    if (eff.type === 'AUDIO_ON_PHASE_SWITCH') {
+      // Phase switch should always stop previous audio immediately.
+      audioManager.stopAll();
+      if (!soundEnabled) continue;
+
+      if (eff.autoStart) {
+        // Phase switch uses flip delay (600ms). Start the new phase sound after the UI flip.
+        const token = audioManager._playToken;
+        setTimeout(() => {
+          // If another sound started or stopAll() was called since scheduling, skip.
+          if (audioManager._playToken !== token) return;
+          audioManager.playPhase(currentPhase ? currentPhase.type : 'work');
+        }, 610);
+      }
+      continue;
+    }
+  }
+}
+
+function dispatch(event) {
+  syncModelFromGlobals();
+  const prev = { ...MODEL };
+
+  const { next, effects } = transition(prev, event);
+
+  // Apply event side-effects that mutate globals/counters/UI (legacy functions)
+  // START/PAUSE: call existing functions (audio is gated by AUDIO_EFFECTS_MODE).
+  if (event.type === 'START') startTimer();
+  else if (event.type === 'PAUSE') pauseTimer();
+  else if (event.type === 'TOGGLE') handleSingleClick_legacy();
+  else if (event.type === 'RESET') dispatch({ type: 'RESET' });
+  else if (event.type === 'NEXT') moveToNextPhase(!!event.autoStart, !!event.completed);
+  else if (event.type === 'COMPLETE') moveToNextPhase(true, true);
+
+  // Sync again after legacy mutations
+  syncModelFromGlobals();
+  const after = { ...MODEL };
+
+  render(prev, after);
+  applyEffects(prev, after, effects);
+}
+
+// Keep old click behavior but route through dispatch()
+function handleSingleClick_legacy() {
   if (settingsOpen || milestonePendingReset) return;
   if (isRunning) {
     pauseTimer();
@@ -1179,6 +1359,11 @@ function handleSingleClick() {
   } else {
     startTimer();
   }
+}
+
+function handleSingleClick() {
+  if (settingsOpen || milestonePendingReset) return;
+  dispatch({ type: 'TOGGLE' });
 }
 
 // Disable container-level click/dblclick for timer controls; use only the circle area.
@@ -1222,7 +1407,7 @@ nextButton.addEventListener('click', (e) => {
     phase: skippedPhase
   });
 
-  moveToNextPhase(wasRunning, false);
+  dispatch({ type: 'NEXT', autoStart: wasRunning, completed: false });
 });
 
 function minutesToHandlePosition(minutes) {
@@ -1290,19 +1475,24 @@ durationHandle.addEventListener('mousedown', (e) => {
   draggingHandle = true;
   e.stopPropagation();
   e.preventDefault();
-});
 
-window.addEventListener('mousemove', (e) => {
-  if (!draggingHandle) return;
-  e.preventDefault();
-  updateDraftDurationFromHandle(e);
-});
+  // Attach global listeners only during active drag to avoid unnecessary work
+  const onDragMove = (ev) => {
+    if (!draggingHandle) return;
+    ev.preventDefault();
+    updateDraftDurationFromHandle(ev);
+  };
 
-window.addEventListener('mouseup', () => {
-  if (draggingHandle) {
+  const onDragEnd = () => {
     draggingHandle = false;
-  }
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', onDragEnd);
+  };
+
+  window.addEventListener('mousemove', onDragMove, { passive: false });
+  window.addEventListener('mouseup', onDragEnd, { once: true });
 });
+
 
 svg.addEventListener('click', (e) => {
   if (!settingsOpen) return;
