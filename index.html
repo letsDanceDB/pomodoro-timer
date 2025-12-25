@@ -28,16 +28,6 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%0A%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22central%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%3E%F0%9F%8D%85%3C/text%3E%0A%3C/svg%3E" />
 
-
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-VQWZ84JRZM"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-VQWZ84JRZM', { anonymize_ip: true });
-</script>
-
 </head>
 
 <body>
@@ -49,7 +39,9 @@
     <section aria-label="Pomodoro focus timer">
         
   <div id="root">
-    <div id="timer-container" class="timer-container">
+    
+    <div id="shortbreak-typing" class="shortbreak-typing" aria-live="polite"></div>
+<div id="timer-container" class="timer-container">
       <button id="settings-button" type="button" class="settings-button settings-icon-btn" title="Settings">⚙</button>
       <button id="back-from-settings-button" type="button" class="phase-back-btn">← Back</button>
       <div id="ripple"></div>
@@ -176,8 +168,7 @@
 <div id="helper-text" class="helper-text">
       Click time to start/pause • Double-click time to reset
     </div>
-
-    <div class="focus-dots">
+<div class="focus-dots">
       <span class="focus-dot"></span>
       <span class="focus-dot"></span>
       <span class="focus-dot"></span>
@@ -199,7 +190,7 @@
         You have done a set, you can start again from the beginning.
       </div>
       <div id="work-summary" class="summary-text">
-      Working session finished: 0 &bull; skipped: 0 &bull; interrupted: 0
+      Working session finished: 0 &bull; skipped: 0 &bull; not completed: 0
     </div>
       <button id="milestone-ok-btn" class="milestone-modal-ok" type="button">OK</button>
     </div>
@@ -237,6 +228,8 @@
   <audio id="combo-sound" src="assets/sounds/ui_flip_spin_blip_gliss.wav" preload="auto"></audio>
   <audio id="work-sound" src="assets/sounds/pomodoro_switch_beep.wav" preload="auto"></audio>
   <audio id="work-pause-sound" src="assets/sounds/pomodoro_pause.mp3" preload="auto"></audio>
+    <audio id="back-whoosh-sound" src="assets/sounds/short_whoosh.mp3" preload="auto"></audio>
+    <audio id="click-crisp-sound" src="assets/sounds/click_crisp.wav" preload="auto"></audio>
     </section>
   </main>
   <script src="js/app.js"></script>

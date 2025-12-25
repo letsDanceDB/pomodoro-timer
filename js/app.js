@@ -62,55 +62,34 @@ const timerState = new TimerState();
 
 // -------------------- Audio manager --------------------
 class AudioManager {
-  constructor({ workSound, breakSound, comboSound, workPauseSound } = {}) {
+  constructor({ workSound, breakSound, comboSound, workPauseSound, backWhooshSound, crispClickSound } = {}) {
     this.workSound = workSound || null;
     this.breakSound = breakSound || null;
     this.comboSound = comboSound || null;
     this.workPauseSound = workPauseSound || null;
-
-    // Token to cancel overlapping rapid plays (fast Next/phase switches)
-    this._playToken = 0;
+    this.backWhooshSound = backWhooshSound || null;
+    this.crispClickSound = crispClickSound || null;
   }
-
+  playWorkStart() {
+    safePlayAudio(this.workSound);
+  }
+  playBreakStart() {
+    safePlayAudio(this.breakSound);
+  }
+  playCombo() {
+    safePlayAudio(this.comboSound);
+  }
+  playWorkPause() {
+    safePlayAudio(this.workPauseSound);
+  }
   stopAll() {
-    const list = [this.workSound, this.breakSound, this.comboSound, this.workPauseSound].filter(Boolean);
-    for (const snd of list) {
-      try { snd.pause(); } catch (_) {}
-      try { snd.currentTime = 0; } catch (_) {}
-    }
-    // invalidate any in-flight play
-    this._playToken++;
-  }
-
-  playWorkStart() { this._safePlay(this.workSound); }
-  playBreakStart() { this._safePlay(this.breakSound); }
-  playCombo() { this._safePlay(this.comboSound); }
-  playWorkPause() { this._safePlay(this.workPauseSound); }
-
-  // Phase mapping used by applyEffects()
-  playPhase(phaseType) {
-    if (phaseType === 'work') return this.playWorkStart();
-    // treat both 'break' and 'longBreak' as break-start sound (you can swap if you add a separate long break sound)
-    if (phaseType === 'break' || phaseType === 'longBreak') return this.playBreakStart();
-  }
-
-  _safePlay(soundElement) {
-    if (!soundElement) return;
-    if (typeof soundEnabled !== 'undefined' && !soundEnabled) return;
-
-    const token = ++this._playToken;
-    try {
-      soundElement.currentTime = 0;
-      const p = soundElement.play();
-      if (p && typeof p.then === 'function') {
-        p.then(() => {
-          // If user triggered a new sound while this was starting, stop this one.
-          if (token !== this._playToken) {
-            try { soundElement.pause(); soundElement.currentTime = 0; } catch (_) {}
-          }
-        }).catch(() => {});
-      }
-    } catch (_) {}
+    [this.workSound, this.breakSound].forEach((snd) => {
+      if (!snd) return;
+      try {
+        snd.pause();
+        snd.currentTime = 0;
+      } catch (_) {}
+    });
   }
 }
 
@@ -205,12 +184,12 @@ const feedbackAnswers = {
   download_stats: null
 };
 
-function logAnalyticsEvent(name, params = {}) {
-  // Safe no-op if GA isn't loaded (never break the app)
-  if (typeof window.gtag !== 'function') return;
+function logAnalyticsEvent(name, payload) {
   try {
-    window.gtag('event', name, params || {});
-  } catch (_) {}
+    console.log('[GA mock]', name, payload || {});
+  } catch (e) {
+    // no-op if console is unavailable
+  }
 }
 
 function getFeedbackState() {
@@ -351,7 +330,10 @@ function safePlayAudio(soundElement) {
 const workSound = document.getElementById('work-sound');
 const workPauseSound = document.getElementById('work-pause-sound');
 const comboSound = document.getElementById('combo-sound');
-audioManager = new AudioManager({ workSound, breakSound, comboSound, workPauseSound });
+
+const backWhooshSound = document.getElementById('back-whoosh-sound');
+const crispClickSound = document.getElementById('click-crisp-sound');
+audioManager = new AudioManager({ workSound, breakSound, comboSound, workPauseSound, backWhooshSound, crispClickSound });
 
 function playBreakSound() {
   if (!audioManager || !soundEnabled) return;
@@ -360,6 +342,8 @@ function playBreakSound() {
 }
 
 
+
+function playCrispClick() { if (crispClickSound) safePlayAudio(crispClickSound); }
 
 function playWorkSound() {
   if (!audioManager || !soundEnabled) return;
@@ -373,8 +357,6 @@ function playWorkPause() {
 
 
 let soundEnabled = true;
-// Centralize phase/pause audio via applyEffects() (deterministic audio rules)
-const AUDIO_EFFECTS_MODE = true;
 
 const soundToggle = document.getElementById('sound-toggle');
 if (soundToggle) {
@@ -816,6 +798,226 @@ function updateUI() {
   }
 }
 
+// -------------------- Short break typing animation --------------------
+const SHORT_BREAK_TYPING_TEXT = "Merry Christmas and Happy New Year!";
+const SHORT_BREAK_TYPING_DURATION_MS = 6000;
+
+let shortBreakWasRunning = false;
+
+const shortBreakTyping = {
+  timer: null,
+  index: 0,
+  running: false, // typing in progress
+  fullyShown: false,
+};
+
+function getShortBreakTypingEl() {
+  return document.getElementById('shortbreak-typing');
+}
+
+function hideShortBreakTyping() {
+  const el = getShortBreakTypingEl();
+  if (!el) return;
+  el.classList.remove('is-visible');
+  el.classList.add('is-hidden');
+}
+
+function showShortBreakTyping() {
+  const el = getShortBreakTypingEl();
+  if (!el) return;
+  el.classList.remove('is-hidden');
+  el.classList.add('is-visible');
+}
+
+function stopShortBreakTyping({ clear = true } = {}) {
+  if (shortBreakTyping.timer) {
+    clearTimeout(shortBreakTyping.timer);
+    shortBreakTyping.timer = null;
+  }
+  shortBreakTyping.running = false;
+  if (clear) {
+    shortBreakWasRunning = false;
+    shortBreakTyping.index = 0;
+    shortBreakTyping.fullyShown = false;
+    const el = getShortBreakTypingEl();
+    if (el) {
+      el.classList.remove('is-visible');
+      el.classList.remove('is-hidden');
+      el.innerHTML = "";
+    }
+  }
+}
+
+function setShortBreakTypingFullVisible() {
+  const el = getShortBreakTypingEl();
+  if (!el) return;
+
+  if (shortBreakTyping.timer) {
+    clearTimeout(shortBreakTyping.timer);
+    shortBreakTyping.timer = null;
+  }
+  shortBreakTyping.running = false;
+  shortBreakTyping.fullyShown = true;
+  shortBreakTyping.index = SHORT_BREAK_TYPING_TEXT.length;
+
+  el.classList.add('is-visible');
+  el.classList.remove('is-hidden');
+  el.innerHTML = `<span class="text"></span>`;
+  const textEl = el.querySelector('.text');
+  if (textEl) textEl.textContent = SHORT_BREAK_TYPING_TEXT;
+}
+
+function startShortBreakTyping() {
+  const el = getShortBreakTypingEl();
+  if (!el) return;
+
+  // Only in short break AND only when timer is running
+  if (!currentPhase || currentPhase.type !== 'break') return;
+  if (!isRunning) return;
+
+  // If settings are open, stay hidden (but keep state)
+  if (settingsOpen) {
+    hideShortBreakTyping();
+    return;
+  }
+
+  shortBreakWasRunning = true;
+  // Restart from beginning (required on short break start or reset+start)
+  if (shortBreakTyping.timer) clearTimeout(shortBreakTyping.timer);
+  shortBreakTyping.timer = null;
+  shortBreakTyping.index = 0;
+  shortBreakTyping.running = true;
+  shortBreakTyping.fullyShown = false;
+
+  showShortBreakTyping();
+  el.innerHTML = `<span class="text"></span><span class="cursor" aria-hidden="true"></span>`;
+  const textEl = el.querySelector('.text');
+
+  const stepDelay = Math.max(18, Math.floor(SHORT_BREAK_TYPING_DURATION_MS / SHORT_BREAK_TYPING_TEXT.length));
+
+  const step = () => {
+    // Abort if phase/status changed
+    if (!currentPhase || currentPhase.type !== 'break' || !isRunning) {
+      shortBreakTyping.running = false;
+      return;
+    }
+    if (settingsOpen) {
+      // Hide during settings; pause typing until user returns
+      hideShortBreakTyping();
+      shortBreakTyping.running = false;
+      return;
+    }
+
+    if (!textEl) return;
+    shortBreakTyping.index += 1;
+    textEl.textContent = SHORT_BREAK_TYPING_TEXT.slice(0, shortBreakTyping.index);
+
+    if (shortBreakTyping.index < SHORT_BREAK_TYPING_TEXT.length) {
+      shortBreakTyping.timer = setTimeout(step, stepDelay);
+    } else {
+      shortBreakTyping.timer = null;
+      shortBreakTyping.running = false;
+      shortBreakTyping.fullyShown = true;
+      // remove cursor after finished (optional)
+      const cur = el.querySelector('.cursor');
+      if (cur) cur.remove();
+    }
+  };
+
+  shortBreakTyping.timer = setTimeout(step, stepDelay);
+}
+
+function syncShortBreakTyping(reason = "") {
+  const el = getShortBreakTypingEl();
+  if (!el) return;
+
+  const inShortBreak = !!currentPhase && currentPhase.type === 'break';
+  const inSettings = !!settingsOpen;
+
+  if (reason === 'reset') {
+    // After reset, keep hidden until timer actually starts running again.
+    stopShortBreakTyping({ clear: true });
+    hideShortBreakTyping();
+    shortBreakWasRunning = false;
+    return;
+  }
+
+  // If we just returned from Settings while short break is running, restart typing from the beginning.
+  if (reason === 'settings-close' && inShortBreak && !inSettings && isRunning) {
+    stopShortBreakTyping({ clear: true });
+    startShortBreakTyping();
+    return;
+  }
+
+
+  if (!inShortBreak) {
+    // Leaving short break -> disappear
+    stopShortBreakTyping({ clear: true });
+    return;
+  }
+
+  // In short break:
+  if (inSettings) {
+    // invisible while in settings
+    hideShortBreakTyping();
+    return;
+  }
+
+  // Not in settings:
+  if (!isRunning) {
+    // Only show the full text on pause if this short break had actually been running.
+    if (shortBreakWasRunning) {
+      setShortBreakTypingFullVisible();
+    } else {
+      // User just switched to short break without starting -> keep invisible.
+      hideShortBreakTyping();
+    }
+    return;
+  }
+
+  // Running in short break:
+  // If it hasn't finished or isn't running, start typing (only on true "start of running short break")
+  if (!shortBreakTyping.fullyShown && !shortBreakTyping.running && shortBreakTyping.index === 0) {
+    startShortBreakTyping();
+  } else if (shortBreakTyping.fullyShown) {
+    showShortBreakTyping();
+  } else {
+    // typing mid-progress -> show
+    showShortBreakTyping();
+    // if it was paused due to settings earlier, resume by continuing typing
+    if (!shortBreakTyping.running && shortBreakTyping.index > 0 && shortBreakTyping.index < SHORT_BREAK_TYPING_TEXT.length) {
+      // Continue typing from current index
+      shortBreakTyping.running = true;
+      el.innerHTML = `<span class="text"></span><span class="cursor" aria-hidden="true"></span>`;
+      const textEl = el.querySelector('.text');
+      if (textEl) textEl.textContent = SHORT_BREAK_TYPING_TEXT.slice(0, shortBreakTyping.index);
+
+      const stepDelay = Math.max(18, Math.floor(SHORT_BREAK_TYPING_DURATION_MS / SHORT_BREAK_TYPING_TEXT.length));
+      const step = () => {
+        if (!currentPhase || currentPhase.type !== 'break' || !isRunning || settingsOpen) {
+          shortBreakTyping.running = false;
+          if (settingsOpen) hideShortBreakTyping();
+          return;
+        }
+        shortBreakTyping.index += 1;
+        if (textEl) textEl.textContent = SHORT_BREAK_TYPING_TEXT.slice(0, shortBreakTyping.index);
+        if (shortBreakTyping.index < SHORT_BREAK_TYPING_TEXT.length) {
+          shortBreakTyping.timer = setTimeout(step, stepDelay);
+        } else {
+          shortBreakTyping.timer = null;
+          shortBreakTyping.running = false;
+          shortBreakTyping.fullyShown = true;
+          const cur = el.querySelector('.cursor');
+          if (cur) cur.remove();
+        }
+      };
+      shortBreakTyping.timer = setTimeout(step, stepDelay);
+    }
+  }
+}
+
+
+
 
 function triggerFlip() {
   if (animationManager) {
@@ -849,9 +1051,14 @@ function startTimer() {
   // - Auto-start after a phase switch already played a transition sound in moveToNextPhase, so suppress it here.
   const isResume = targetTimestamp != null && remaining > 0 && remaining < totalSeconds;
   const isWorkResume = userPausedWork && currentPhase.type === 'work' && isResume;
-  if (!AUDIO_EFFECTS_MODE && soundEnabled) {
+  const isBreakResume = isResume && currentPhase && (currentPhase.type === 'break' || currentPhase.type === 'longBreak');
+
+  if (soundEnabled) {
     if (isWorkResume) {
       playWorkSound();
+    } else if (isBreakResume) {
+      // Requirement: pause/resume during break/long break uses crisp click, not phase start
+      playCrispClick();
     } else if (!isResume && !suppressNextStartSound) {
       if (currentPhase.type === 'work') {
         playWorkSound();
@@ -907,7 +1114,7 @@ function startTimer() {
       clearInterval(intervalId);
       intervalId = null;
       isRunning = false;
-      dispatch({ type: 'COMPLETE' });
+      moveToNextPhase(true, true);
       return;
     }
 
@@ -915,6 +1122,7 @@ function startTimer() {
       animateLongBreakDots();
     }
   }, 250);
+  syncShortBreakTyping('pause-resume');
 }
 
 function pauseTimer() {
@@ -951,6 +1159,9 @@ function pauseTimer() {
     playWorkPause();
     // Mark that the user paused during Work so resume can replay the Work-start sound
     userPausedWork = true;
+  } else if (!silentPause && !settingsOpen && currentPhase && (currentPhase.type === 'break' || currentPhase.type === 'longBreak')) {
+    // Requirement: pause during break/long break uses crisp click
+    playCrispClick();
   }
 
   // When pausing during break or long break, stop pulsation of the dots
@@ -970,11 +1181,20 @@ function pauseTimer() {
   }
   silentPause = false;
   timerState.setState(settingsOpen ? APP_STATE.SETTINGS : APP_STATE.PAUSED);
+  syncShortBreakTyping('pause-resume');
 }
 
 function resetCurrentPhase() {
+  const _prevPhaseTypeForTyping = currentPhase ? currentPhase.type : null;
   pauseTimer();
+  // Typing: if user resets during short break, restart typing on the next start
+  if (currentPhase && currentPhase.type === 'break') {
+    stopShortBreakTyping({ clear: true });
+    shortBreakWasRunning = false;
+  }
   currentPhase = phases[currentPhaseIndex];
+  // Typing: disappear when leaving short break, (re)start only when running
+  syncShortBreakTyping('reset');
   totalSeconds = currentPhase.duration;
   remaining = totalSeconds;
   targetTimestamp = null;
@@ -1124,6 +1344,7 @@ function animateLongBreakDots() {
 }
 
 function moveToNextPhase(autoStart, completed) {
+  const _prevPhaseTypeForTyping = currentPhase ? currentPhase.type : null;
   const prevPhaseType = currentPhase.type;
   finalizeCurrentPhase(!!completed);
 
@@ -1152,6 +1373,8 @@ function moveToNextPhase(autoStart, completed) {
   pauseTimer();
   currentPhaseIndex = (currentPhaseIndex + 1) % phases.length;
   currentPhase = phases[currentPhaseIndex];
+  // Typing: disappear when leaving short break, (re)start only when running
+  syncShortBreakTyping('phase-change');
   const newPhaseType = currentPhase.type;
 
   totalSeconds = currentPhase.duration;
@@ -1175,7 +1398,7 @@ function moveToNextPhase(autoStart, completed) {
   updateFocusDots(prevPhaseType);
 
   // Play transition sounds only if previous phase was running (autoStart)
-  if (!AUDIO_EFFECTS_MODE && autoStart && soundEnabled) {
+  if (autoStart && soundEnabled) {
     if (prevPhaseType === 'work' && (newPhaseType === 'break' || newPhaseType === 'longBreak')) {
       playBreakSound();
     } else if ((prevPhaseType === 'break' || prevPhaseType === 'longBreak') && newPhaseType === 'work') {
@@ -1195,163 +1418,7 @@ function moveToNextPhase(autoStart, completed) {
   }
 }
 
-
-// -------------------- State machine core (transition + dispatch + effects) --------------------
-const MODEL = {
-  status: 'paused',      // 'running' | 'paused'
-  phaseIndex: 0,
-  settingsOpen: false,
-  milestonePendingReset: false,
-  userPausedWork: false,
-};
-
-function syncModelFromGlobals() {
-  MODEL.status = isRunning ? 'running' : 'paused';
-  MODEL.phaseIndex = currentPhaseIndex;
-  MODEL.settingsOpen = !!settingsOpen;
-  MODEL.milestonePendingReset = !!milestonePendingReset;
-  MODEL.userPausedWork = !!userPausedWork;
-}
-
-function transition(prev, event) {
-  // Pure computation of next model + declarative effects (no DOM/audio here)
-  const next = { ...prev };
-  const effects = [];
-
-  switch (event.type) {
-    case 'START':
-      if (prev.status === 'running' || prev.settingsOpen || prev.milestonePendingReset) return { next: prev, effects };
-      next.status = 'running';
-      effects.push({ type: 'AUDIO_ON_START' });
-      return { next, effects };
-
-    case 'PAUSE':
-      if (prev.status !== 'running') return { next: prev, effects };
-      next.status = 'paused';
-      // mark that user paused during work for resume sound logic
-      next.userPausedWork = (currentPhase && currentPhase.type === 'work');
-      effects.push({ type: 'AUDIO_ON_PAUSE' });
-      return { next, effects };
-
-    case 'TOGGLE':
-      return prev.status === 'running'
-        ? transition(prev, { type: 'PAUSE' })
-        : transition(prev, { type: 'START' });
-
-    case 'NEXT': {
-      // NEXT is a phase transition. We let existing moveToNextPhase() update globals/counters/UI.
-      // We still define the audio effect here.
-      effects.push({ type: 'AUDIO_ON_PHASE_SWITCH', autoStart: !!event.autoStart });
-      // phaseIndex will be synced from globals after moveToNextPhase runs
-      return { next, effects };
-    }
-
-    case 'COMPLETE': {
-      effects.push({ type: 'AUDIO_ON_PHASE_SWITCH', autoStart: true });
-      return { next, effects };
-    }
-
-    case 'RESET':
-      effects.push({ type: 'AUDIO_STOP_ALL' });
-      return { next, effects };
-
-    case 'SETTINGS_OPEN':
-      next.settingsOpen = true;
-      effects.push({ type: 'AUDIO_STOP_ALL' });
-      return { next, effects };
-
-    case 'SETTINGS_CLOSE':
-      next.settingsOpen = false;
-      return { next, effects };
-
-    default:
-      return { next: prev, effects };
-  }
-}
-
-function render(prev, next) {
-  // Keep render thin: existing functions already update DOM.
-  // Here we only ensure model->global sync if needed in future.
-}
-
-function applyEffects(prev, next, effects) {
-  if (!audioManager) return;
-
-  for (const eff of effects) {
-    if (eff.type === 'AUDIO_STOP_ALL') {
-      audioManager.stopAll();
-      continue;
-    }
-
-    if (eff.type === 'AUDIO_ON_PAUSE') {
-      // Always stop phase audio on pause.
-      audioManager.stopAll();
-      // Pause sound only for work phase.
-      if (soundEnabled && currentPhase && currentPhase.type === 'work') {
-        audioManager.playWorkPause();
-      }
-      continue;
-    }
-
-    if (eff.type === 'AUDIO_ON_START') {
-      // Starting/resuming running: stop anything stale, then play phase start.
-      audioManager.stopAll();
-      if (!soundEnabled) continue;
-
-      // If user paused during work and resumes work => replay work start.
-      const shouldReplayWork = (prev.userPausedWork && currentPhase && currentPhase.type === 'work');
-      if (shouldReplayWork) {
-        audioManager.playWorkStart();
-      } else {
-        audioManager.playPhase(currentPhase ? currentPhase.type : 'work');
-      }
-      continue;
-    }
-
-    if (eff.type === 'AUDIO_ON_PHASE_SWITCH') {
-      // Phase switch should always stop previous audio immediately.
-      audioManager.stopAll();
-      if (!soundEnabled) continue;
-
-      if (eff.autoStart) {
-        // Phase switch uses flip delay (600ms). Start the new phase sound after the UI flip.
-        const token = audioManager._playToken;
-        setTimeout(() => {
-          // If another sound started or stopAll() was called since scheduling, skip.
-          if (audioManager._playToken !== token) return;
-          audioManager.playPhase(currentPhase ? currentPhase.type : 'work');
-        }, 610);
-      }
-      continue;
-    }
-  }
-}
-
-function dispatch(event) {
-  syncModelFromGlobals();
-  const prev = { ...MODEL };
-
-  const { next, effects } = transition(prev, event);
-
-  // Apply event side-effects that mutate globals/counters/UI (legacy functions)
-  // START/PAUSE: call existing functions (audio is gated by AUDIO_EFFECTS_MODE).
-  if (event.type === 'START') startTimer();
-  else if (event.type === 'PAUSE') pauseTimer();
-  else if (event.type === 'TOGGLE') handleSingleClick_legacy();
-  else if (event.type === 'RESET') dispatch({ type: 'RESET' });
-  else if (event.type === 'NEXT') moveToNextPhase(!!event.autoStart, !!event.completed);
-  else if (event.type === 'COMPLETE') moveToNextPhase(true, true);
-
-  // Sync again after legacy mutations
-  syncModelFromGlobals();
-  const after = { ...MODEL };
-
-  render(prev, after);
-  applyEffects(prev, after, effects);
-}
-
-// Keep old click behavior but route through dispatch()
-function handleSingleClick_legacy() {
+function handleSingleClick() {
   if (settingsOpen || milestonePendingReset) return;
   if (isRunning) {
     pauseTimer();
@@ -1359,11 +1426,6 @@ function handleSingleClick_legacy() {
   } else {
     startTimer();
   }
-}
-
-function handleSingleClick() {
-  if (settingsOpen || milestonePendingReset) return;
-  dispatch({ type: 'TOGGLE' });
 }
 
 // Disable container-level click/dblclick for timer controls; use only the circle area.
@@ -1407,7 +1469,7 @@ nextButton.addEventListener('click', (e) => {
     phase: skippedPhase
   });
 
-  dispatch({ type: 'NEXT', autoStart: wasRunning, completed: false });
+  moveToNextPhase(wasRunning, false);
 });
 
 function minutesToHandlePosition(minutes) {
@@ -1475,24 +1537,19 @@ durationHandle.addEventListener('mousedown', (e) => {
   draggingHandle = true;
   e.stopPropagation();
   e.preventDefault();
-
-  // Attach global listeners only during active drag to avoid unnecessary work
-  const onDragMove = (ev) => {
-    if (!draggingHandle) return;
-    ev.preventDefault();
-    updateDraftDurationFromHandle(ev);
-  };
-
-  const onDragEnd = () => {
-    draggingHandle = false;
-    window.removeEventListener('mousemove', onDragMove);
-    window.removeEventListener('mouseup', onDragEnd);
-  };
-
-  window.addEventListener('mousemove', onDragMove, { passive: false });
-  window.addEventListener('mouseup', onDragEnd, { once: true });
 });
 
+window.addEventListener('mousemove', (e) => {
+  if (!draggingHandle) return;
+  e.preventDefault();
+  updateDraftDurationFromHandle(e);
+});
+
+window.addEventListener('mouseup', () => {
+  if (draggingHandle) {
+    draggingHandle = false;
+  }
+});
 
 svg.addEventListener('click', (e) => {
   if (!settingsOpen) return;
@@ -1701,6 +1758,7 @@ function applySettings() {
 if (backFromSettingsButton) {
   backFromSettingsButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (soundEnabled && backWhooshSound) safePlayAudio(backWhooshSound);
     applySettings();
   });
 }

@@ -478,10 +478,10 @@ body {
 .milestone-modal-text {
   font-size: 14px;
   opacity: 0.9;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
 .milestone-modal-ok {
-  margin-top: 4px;
+  margin-top: 12px;
   padding: 6px 18px;
   border-radius: 999px;
   border: none;
@@ -544,7 +544,7 @@ body {
 .feedback-close-btn {
   position: absolute;
   top: 4px;
-  right: 10px;
+  right: 4px;
   background: transparent;
   border: none;
   color: #cfd2ff;
@@ -614,4 +614,46 @@ body {
 .feedback-skip-btn:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+
+/* Short break typing animation (shown only in RUNNING short break, hidden in Settings) */
+.shortbreak-typing{
+  margin: 0 auto 10px auto;
+  min-height: 1.6em;
+  text-align: center;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.shortbreak-typing.is-visible{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shortbreak-typing.is-hidden{
+  opacity: 0 !important;
+  transform: translateY(-2px) !important;
+}
+
+.shortbreak-typing .cursor{
+  display: inline-block;
+  width: 0.6ch;
+  margin-left: 0.15ch;
+  border-right: 2px solid currentColor;
+  animation: shortBreakCursorBlink 900ms steps(1) infinite;
+}
+
+@keyframes shortBreakCursorBlink{
+  50% { border-right-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .shortbreak-typing{ transition: none; }
+  .shortbreak-typing .cursor{ animation: none; }
 }
