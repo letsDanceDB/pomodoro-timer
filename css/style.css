@@ -780,3 +780,17 @@ body {
 .feedback-modal.closing{
   transform: translateY(100%);
 }
+/* Prevent scrollbars caused by stars slightly overflowing their container */
+.shortbreak-stars {
+  overflow: hidden;           /* clips stars at the edges */
+}
+
+/* If your stars container is full-screen or positioned on body, this is the safety net */
+html, body {
+  overflow-x: hidden;         /* kills horizontal scrollbar */
+}
+
+/* Optional: if you still see vertical scrollbars during the effect */
+body.shortbreak-stars-active {
+  overflow: hidden;           /* locks scrolling while stars are active */
+}
