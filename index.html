@@ -39,10 +39,12 @@
     <section aria-label="Pomodoro focus timer">
         
   <div id="root">
-    
+      <div id="shortbreak-stars" class="shortbreak-stars is-hidden" aria-hidden="true"></div>
     <div id="shortbreak-typing" class="shortbreak-typing" aria-live="polite"></div>
 <div id="timer-container" class="timer-container">
-      <button id="settings-button" type="button" class="settings-button settings-icon-btn" title="Settings">⚙</button>
+      
+
+<button id="settings-button" type="button" class="settings-button settings-icon-btn" title="Settings">⚙</button>
       <button id="back-from-settings-button" type="button" class="phase-back-btn">← Back</button>
       <div id="ripple"></div>
       <div id="circle-outer" class="circle-outer">
@@ -200,9 +202,9 @@
   <div id="feedback-modal" class="feedback-modal">
     <div class="feedback-modal-content">
       <button type="button" id="feedback-close-btn" class="feedback-close-btn" aria-label="Close">×</button>
-      <div class="feedback-modal-title">Quick feedback</div>
+      <div class="feedback-modal-title">Quick feedback (5 sec) </div>
       <div class="feedback-modal-text">
-        Help us improve the app
+      
       </div>
       <div class="feedback-question">
         <span>Do you need a mobile app (iOS / Android)?</span>
@@ -218,7 +220,6 @@
           <button type="button" class="feedback-btn" data-question="download_stats" data-answer="no">👎</button>
         </div>
       </div>
-      <button id="feedback-skip-btn" class="feedback-skip-btn" type="button">Skip for now</button>
     </div>
   </div>
   

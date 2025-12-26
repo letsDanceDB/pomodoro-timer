@@ -29,7 +29,7 @@ body {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  z-index: 3;
+  z-index: 50;
   opacity: 0;
   transition: opacity 0.8s ease;
 }
@@ -276,7 +276,7 @@ body {
 .timer-container > #next-button {
   position: absolute;
   top: 50%;
-  left: calc(100% + 4px); /* closer to the circle on desktop */
+  left: calc(98% + 1px); /* closer to the circle on desktop */
   transform: translateY(-50%);
   margin: 0;
 }
@@ -291,7 +291,7 @@ body {
   top: 8px;
   left: 12px;
   margin: 0;
-  padding: 4px 10px;
+  padding: 41px 10px;
   border-radius: 999px;
   font-size: 20px;
   line-height: 1;
@@ -310,7 +310,7 @@ body {
   top: 8px;
   left: 12px;
   margin: 0;
-  padding: 4px 10px;
+  padding: 41px 10px;
   border-radius: 999px;
   border: none;
   font-size: 14px;
@@ -656,4 +656,127 @@ body {
 @media (prefers-reduced-motion: reduce){
   .shortbreak-typing{ transition: none; }
   .shortbreak-typing .cursor{ animation: none; }
+}
+
+
+/* Short break stars overlay (only in short break; synced via JS) */
+.shortbreak-stars{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50; /* above circle visuals, below controls */
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.shortbreak-stars.is-visible{ opacity: 1; }
+.shortbreak-stars.is-hidden{ opacity: 0 !important; }
+
+.shortbreak-stars .sb-star{
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  opacity: 0.22;
+  transform: scale(0.9);
+  /* subtle idle shimmer */
+  animation: sbStarIdle 1.8s ease-in-out infinite;
+}
+
+@keyframes sbStarIdle{
+  0%, 100% { opacity: 0.18; transform: scale(0.85); }
+  50% { opacity: 0.32; transform: scale(1.0); }
+}
+
+.shortbreak-stars .sb-star.glint{
+  opacity: 1;
+  transform: scale(1.55);
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.95));
+}
+
+
+#timer-container{ position: relative; }
+
+
+/* Short break stars (glistening) */
+#timer-container{ position: relative; }
+
+.shortbreak-stars{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index: 60;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.shortbreak-stars.is-visible{ opacity: 1; }
+.shortbreak-stars.is-hidden{ opacity: 0 !important; }
+
+.shortbreak-stars .sb-star{
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  opacity: 0.35;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.25));
+  animation: glowPulse var(--pulseDur) ease-in-out infinite;
+  animation-delay: var(--pulseDelay);
+  will-change: opacity, filter, transform;
+}
+
+.shortbreak-stars .sb-star::before,
+.shortbreak-stars .sb-star::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--sparkLen);
+  height: 1px;
+  background: linear-gradient(to right,
+    rgba(255,255,255,0),
+    rgba(255,255,255,var(--sparkAlpha)),
+    rgba(255,255,255,0)
+  );
+  transform: translate(-50%, -50%) rotate(0deg);
+  opacity: 0;
+  animation: sparkle var(--sparkDur) ease-in-out infinite;
+  animation-delay: var(--sparkDelay);
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.35));
+  will-change: opacity, transform;
+}
+
+.shortbreak-stars .sb-star::after{
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+@keyframes glowPulse{
+  0%, 100%{
+    opacity: 0.25;
+    transform: scale(1);
+    filter: drop-shadow(0 0 3px rgba(255,255,255,0.20));
+  }
+  50%{
+    opacity: 0.75;
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 10px rgba(255,255,255,0.40));
+  }
+}
+
+@keyframes sparkle{
+  0%, 78%, 100%{
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(0.9);
+  }
+  82%{
+    opacity: 0.95;
+    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(1.15);
+  }
+  90%{
+    opacity: 0.25;
+    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(1.0);
+  }
+}
+
+/* ===== Added for clean separation (moved from JS) ===== */
+/* Feedback modal: slide out to bottom on close */
+.feedback-modal.closing{
+  transform: translateY(100%);
 }

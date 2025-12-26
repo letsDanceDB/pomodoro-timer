@@ -24,7 +24,7 @@ const CONFIG = {
   },
   THEME: {
     WORK_DEFAULT: 'rgb(255, 159, 174)',
-    BREAK_DEFAULT: 'rgb(43, 47, 58)',
+    BREAK_DEFAULT: 'rgb(22, 22, 31)',
     LONG_BREAK_DEFAULT: 'radial-gradient(circle at top, #1c3b70 0%, #050819 60%, #02040c 100%)'
   }
 };
@@ -170,26 +170,47 @@ const milestoneModalTitle = milestoneModal ? milestoneModal.querySelector('.mile
 let milestonePendingReset = false;
 
 const FEEDBACK = {
-  STORAGE_KEY: 'pomodoroCircleTimer.feedbackSurvey.v1',
-  COOLDOWN_MS: 14 * 24 * 60 * 60 * 1000,
-  MAX_SHOWS: 2
+  STORAGE_KEY: 'pomodoroCircleTimer.feedbackSurvey.v2',
+  SETS_KEY: 'pomodoroCircleTimer.setsCompleted.v1',
+  COOLDOWN_MS: 14 * 24 * 60 * 60 * 1000
 };
 
 const feedbackModal = document.getElementById('feedback-modal');
-const feedbackSkipBtn = document.getElementById('feedback-skip-btn');
+const feedbackSkipBtn = document.getElementById('feedback-skip-btn'); // optional (may not exist)
 const feedbackButtons = feedbackModal ? feedbackModal.querySelectorAll('.feedback-btn') : null;
 const feedbackCloseBtn = document.getElementById('feedback-close-btn');
+let feedbackThanks = document.getElementById('feedback-thanks');
 const feedbackAnswers = {
   mobile_app: null,
   download_stats: null
 };
 
-function logAnalyticsEvent(name, payload) {
+function resetFeedbackSurveyUI() {
+  // Reset in-memory answers
+  feedbackAnswers.mobile_app = null;
+  feedbackAnswers.download_stats = null;
+
+  // Reset selected thumbs in DOM
   try {
-    console.log('[GA mock]', name, payload || {});
-  } catch (e) {
-    // no-op if console is unavailable
-  }
+    if (feedbackButtons && feedbackButtons.length) {
+      feedbackButtons.forEach((btn) => btn.classList.remove('feedback-btn-selected'));
+    } else if (feedbackModal) {
+      feedbackModal.querySelectorAll('.feedback-btn-selected').forEach((el) => el.classList.remove('feedback-btn-selected'));
+    }
+  } catch (_) {}
+
+  // Hide "Thanks!" message
+  const t = ensureFeedbackThanksEl();
+  if (t) t.style.visibility = 'hidden';
+}
+
+
+function logAnalyticsEvent(name, params = {}) {
+  // Real GA4 (gtag) event. Safe no-op if GA isn't loaded.
+  if (typeof window.gtag !== 'function') return;
+  try {
+    window.gtag('event', name, params || {});
+  } catch (_) {}
 }
 
 function getFeedbackState() {
@@ -221,43 +242,95 @@ function saveFeedbackState(state) {
   }
 }
 
+function getSetsCompleted() {
+  try {
+    const raw = localStorage.getItem(FEEDBACK.SETS_KEY);
+    const n = parseInt(raw || '0', 10);
+    return Number.isFinite(n) ? n : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+function incrementSetsCompleted() {
+  const next = getSetsCompleted() + 1;
+  try { localStorage.setItem(FEEDBACK.SETS_KEY, String(next)); } catch (_) {}
+  return next;
+}
+
 function shouldShowFeedbackSurvey() {
+  // Show after 2nd set (2nd long break), even if long break was skipped.
+  const sets = getSetsCompleted();
+  if (sets < 2) return false;
+
   const state = getFeedbackState();
-  if (state.shownCount >= FEEDBACK.MAX_SHOWS) {
-    return false;
-  }
-  if (!state.shownCount) {
-    return true;
-  }
-  const now = Date.now();
-  return (now - state.lastShownAt) >= FEEDBACK.COOLDOWN_MS;
+  const lastShownAt = state && state.lastShownAt ? state.lastShownAt : 0;
+  if (!lastShownAt) return true;
+  return (Date.now() - lastShownAt) >= FEEDBACK.COOLDOWN_MS;
 }
 
 function markFeedbackShown() {
-  const prev = getFeedbackState();
-  const nextCount = Math.min((prev.shownCount || 0) + 1, FEEDBACK.MAX_SHOWS);
-  const nextState = {
-    shownCount: nextCount,
-    lastShownAt: Date.now()
-  };
-  saveFeedbackState(nextState);
+  saveFeedbackState({ lastShownAt: Date.now() });
 }
 
 function maybeCloseFeedbackModal() {
   if (!feedbackModal) return;
   if (feedbackAnswers.mobile_app && feedbackAnswers.download_stats) {
-    // Small delay so user can see their last choice before modal disappears
-    setTimeout(() => {
-      if (feedbackModal.classList.contains('visible')) {
-        feedbackModal.classList.remove('visible');
-      }
-    }, 800);
+    const t = ensureFeedbackThanksEl();
+    if (t) t.style.visibility = 'visible';
+    logAnalyticsEvent('feedback_survey_complete', {});
+    setTimeout(() => closeFeedbackSurvey('answered_both'), 700);
   }
+}
+
+
+function ensureFeedbackThanksEl() {
+  if (feedbackThanks) return feedbackThanks;
+  try {
+    if (!feedbackModal) return null;
+    const el = document.createElement('div');
+    el.id = 'feedback-thanks';
+    el.textContent = 'Thanks! 🙌';
+    // Reserve a dedicated line (space) even when hidden
+    el.style.display = 'block';
+    el.style.visibility = 'hidden';
+    el.style.minHeight = '1.4em';
+    el.style.marginTop = '10px';
+    el.style.fontWeight = '600';
+    // append near bottom of modal content
+    const content = feedbackModal.querySelector('.feedback-modal-content') || feedbackModal;
+    content.appendChild(el);
+    feedbackThanks = el;
+    return el;
+  } catch (_) {
+    return null;
+  }
+}
+
+function closeFeedbackSurvey(reason) {
+  if (!feedbackModal) return;
+  feedbackModal.classList.add('closing');
+  setTimeout(() => {
+    feedbackModal.classList.remove('visible');
+    feedbackModal.classList.remove('closing');
+    const t = ensureFeedbackThanksEl();
+    if (t) t.style.visibility = 'hidden';
+  }, 260);
+  // Reset selection so reopening doesn't show previous answers
+  setTimeout(() => { try { resetFeedbackSurveyUI(); } catch (_) {} }, 270);
+  logAnalyticsEvent('feedback_survey_closed', { reason: reason || 'close' });
 }
 
 function openFeedbackSurveyIfEligible() {
   if (!feedbackModal) return;
   if (!shouldShowFeedbackSurvey()) return;
+
+  // Always start from a clean UI state (prevents sticky selections within same session)
+  resetFeedbackSurveyUI();
+
+  feedbackModal.classList.remove('closing');
+  const t = ensureFeedbackThanksEl();
+  if (t) t.style.visibility = 'hidden';
+
   markFeedbackShown();
   feedbackModal.classList.add('visible');
   logAnalyticsEvent('feedback_survey_open', {});
@@ -295,18 +368,14 @@ if (feedbackButtons && feedbackButtons.length) {
 
 if (feedbackSkipBtn && feedbackModal) {
   feedbackSkipBtn.addEventListener('click', () => {
-    logAnalyticsEvent('feedback_survey_skipped', {});
-    feedbackModal.classList.remove('visible');
+    // Skip button is optional; if present, just close with the same animation.
+    closeFeedbackSurvey('skip');
   });
 }
 
 if (feedbackCloseBtn && feedbackModal) {
   feedbackCloseBtn.addEventListener('click', () => {
-    logAnalyticsEvent('feedback_survey_closed', {
-      answered_mobile_app: !!feedbackAnswers.mobile_app,
-      answered_download_stats: !!feedbackAnswers.download_stats
-    });
-    feedbackModal.classList.remove('visible');
+    closeFeedbackSurvey('x');
   });
 }
 
@@ -315,6 +384,7 @@ const settingsSound = document.getElementById('settings-sound');
 const skipSound = document.getElementById('skip-sound');
 function safePlayAudio(soundElement) {
   if (!soundElement) return;
+  try { if (soundElement.dataset && soundElement.dataset.missing === '1') return; } catch (_) {}
   if (typeof soundEnabled !== 'undefined' && !soundEnabled) return;
   try {
     soundElement.currentTime = 0;
@@ -927,6 +997,154 @@ function startShortBreakTyping() {
   shortBreakTyping.timer = setTimeout(step, stepDelay);
 }
 
+
+// ---- Short break stars (16 random stars glisten every 0.5s, only when running) ----
+let sbStarsInterval = null;
+
+function ensureShortBreakStarsContainer() {
+  const timerContainer = document.getElementById('timer-container');
+  if (!timerContainer) return null;
+  // Ensure timer container is positioning context
+  try { if (getComputedStyle(timerContainer).position === 'static') timerContainer.style.position = 'relative'; } catch (_) {}
+  let c = document.getElementById('shortbreak-stars');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'shortbreak-stars';
+    c.className = 'shortbreak-stars';
+    c.setAttribute('aria-hidden', 'true');
+    timerContainer.prepend(c);
+  }
+  return c;
+}
+
+function buildShortBreakStars() {
+  const c = ensureShortBreakStarsContainer();
+  if (!c) return;
+  if (c.dataset.ready === '1') return;
+  c.dataset.ready = '1';
+  c.innerHTML = '';
+  for (let i = 0; i < 16; i++) {
+    const s = document.createElement('span');
+    s.className = 'sb-star';
+    const x = Math.random() * 100;
+    const y = Math.random() * 100;
+    const size = 1.5 + Math.random() * 3.2;
+    s.style.left = x + '%';
+    s.style.top = y + '%';
+    s.style.width = size + 'px';
+    s.style.height = size + 'px';
+    s.style.animationDelay = (Math.random() * 800) + 'ms';
+    c.appendChild(s);
+  }
+}
+
+function stopShortBreakStars() {
+  if (sbStarsInterval) { clearInterval(sbStarsInterval); sbStarsInterval = null; }
+  const c = document.getElementById('shortbreak-stars');
+  if (!c) return;
+  c.classList.remove('is-visible');
+}
+
+function startShortBreakStars() {
+  const c = ensureShortBreakStarsContainer();
+  if (!c) return;
+  buildShortBreakStars();
+  c.classList.add('is-visible');
+
+  if (sbStarsInterval) clearInterval(sbStarsInterval);
+  sbStarsInterval = setInterval(() => {
+    // Only glisten while RUNNING short break and not in settings
+    if (!currentPhase || currentPhase.type !== 'break') return;
+    if (!isRunning) return;
+    if (settingsOpen) return;
+
+    const stars = c.querySelectorAll('.sb-star');
+    if (!stars.length) return;
+    const star = stars[Math.floor(Math.random() * stars.length)];
+    star.classList.add('glint');
+    setTimeout(() => star.classList.remove('glint'), 220);
+  }, 500);
+}
+
+
+// ---- Short break stars (from glistening.html) ----
+let sbStarsBuilt = false;
+
+function sbStarsContainer() {
+  return document.getElementById('shortbreak-stars');
+}
+
+function sbBuildStars() {
+  const c = sbStarsContainer();
+  if (!c) return;
+  if (sbStarsBuilt) return;
+
+  const STAR_COUNT = 140;
+  const rand = (min, max) => min + Math.random() * (max - min);
+
+  c.innerHTML = '';
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const s = document.createElement('div');
+    s.className = 'sb-star';
+
+    const size = rand(1.2, 2.8);
+    s.style.width = size + 'px';
+    s.style.height = size + 'px';
+
+    s.style.left = rand(0, 100) + '%';
+    s.style.top  = rand(0, 100) + '%';
+
+    s.style.setProperty('--pulseDur', rand(3.5, 9.0).toFixed(2) + 's');
+    s.style.setProperty('--pulseDelay', rand(0, 6.0).toFixed(2) + 's');
+
+    s.style.setProperty('--sparkDur', rand(5.5, 14.0).toFixed(2) + 's');
+    s.style.setProperty('--sparkDelay', rand(0, 10.0).toFixed(2) + 's');
+    s.style.setProperty('--sparkLen', rand(10, 26).toFixed(0) + 'px');
+    s.style.setProperty('--sparkAlpha', rand(0.35, 0.85).toFixed(2));
+    s.style.setProperty('--sparkRot', rand(-25, 25).toFixed(0) + 'deg');
+
+    s.style.opacity = rand(0.18, 0.45).toFixed(2);
+
+    c.appendChild(s);
+  }
+
+  sbStarsBuilt = true;
+}
+
+function sbShowStars() {
+  const c = sbStarsContainer();
+  if (!c) return;
+  sbBuildStars();
+  c.classList.remove('is-hidden');
+  c.classList.add('is-visible');
+}
+
+function sbHideStars() {
+  const c = sbStarsContainer();
+  if (!c) return;
+  c.classList.remove('is-visible');
+  c.classList.add('is-hidden');
+}
+
+function syncShortBreakStars(_reason) {
+  // Hide inside settings always
+  if (settingsOpen) {
+    sbHideStars();
+    return;
+  }
+
+  const inShortBreak = currentPhase && currentPhase.type === 'break';
+  if (!inShortBreak) {
+    sbHideStars();
+    return;
+  }
+
+  // Active only in RUNNING mode (per requirement)
+  if (isRunning) sbShowStars();
+  else sbHideStars();
+}
+
+
 function syncShortBreakTyping(reason = "") {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -1091,6 +1309,8 @@ function startTimer() {
   }
   updateUI();
   updateFocusDots(null);
+  syncShortBreakTyping('start');
+  syncShortBreakStars('start');
   if (currentPhase.type === 'longBreak') {
     animateLongBreakDots();
   }
@@ -1123,6 +1343,7 @@ function startTimer() {
     }
   }, 250);
   syncShortBreakTyping('pause-resume');
+  syncShortBreakStars('pause-resume');
 }
 
 function pauseTimer() {
@@ -1195,6 +1416,7 @@ function resetCurrentPhase() {
   currentPhase = phases[currentPhaseIndex];
   // Typing: disappear when leaving short break, (re)start only when running
   syncShortBreakTyping('reset');
+  syncShortBreakStars('reset');
   totalSeconds = currentPhase.duration;
   remaining = totalSeconds;
   targetTimestamp = null;
@@ -1348,8 +1570,9 @@ function moveToNextPhase(autoStart, completed) {
   const prevPhaseType = currentPhase.type;
   finalizeCurrentPhase(!!completed);
 
-  // If a long break just finished, show milestone modal and reset cycle start
+  // If a long break just finished (or was skipped), count a completed set.
   if (prevPhaseType === 'longBreak') {
+    incrementSetsCompleted();
     milestonePendingReset = true;
     // Stop timer and long-break animation, show all dots filled
     pauseTimer();
@@ -1375,6 +1598,7 @@ function moveToNextPhase(autoStart, completed) {
   currentPhase = phases[currentPhaseIndex];
   // Typing: disappear when leaving short break, (re)start only when running
   syncShortBreakTyping('phase-change');
+  syncShortBreakStars('phase-change');
   const newPhaseType = currentPhase.type;
 
   totalSeconds = currentPhase.duration;
@@ -1623,6 +1847,9 @@ settingsButton.addEventListener('click', (e) => {
 
   phaseIndexBeforeSettings = currentPhaseIndex;
   settingsOpen = true;
+  // Hide short break effects while in settings
+  hideShortBreakTyping();
+  stopShortBreakStars();
   wasRunningBeforeSettings = isRunning;
   pauseTimer();
   triggerSettingsSpin();
