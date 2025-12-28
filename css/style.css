@@ -1,3 +1,17 @@
+/**
+ * Pomidorro Timer — Main Styles
+ *
+ * This file contains layout, typography, and the core UI styling for the timer.
+ *
+ * Theme contract used by app.js:
+ * - :root --phase-bg is the current background color.
+ * - body.default-longbreak applies the default long-break gradient.
+ *
+ * Optional effects have their own files:
+ * - css/snow.css  (Long Break snow canvas)
+ * - css/stars.css (Short Break glistening stars)
+ */
+
 /* Screen-reader-only helper */
 .sr-only {
   position: absolute;
@@ -9,9 +23,13 @@
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+/* CSS variables used by app.js for theming */
+:root {
+  --phase-bg: #2b2f3a;
+}
 
 body {
-  background: #2b2f3a;
+  background: var(--phase-bg);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -22,17 +40,13 @@ body {
   perspective: 1000px;
   transition: background 0.25s ease, color 0.25s ease;
 }
-#snow-canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 50;
-  opacity: 0;
-  transition: opacity 0.8s ease;
+
+/* Default Long Break (night-sky) background.
+   JS toggles .default-longbreak to avoid expensive inline gradient changes. */
+body.default-longbreak {
+  background: radial-gradient(circle at top, #1c3b70 0%, #050819 60%, #02040c 100%);
 }
+
 
 50% {
     transform: translate3d(4%, 4%, 0);
@@ -53,6 +67,13 @@ body {
   cursor: default;
   user-select: none;
   z-index: 1;
+}
+
+/* Mobile interaction: allow smooth finger dragging on the SVG duration handle.
+   Without this, some browsers treat the gesture as page scroll/zoom. */
+.timer-svg,
+#duration-handle {
+  touch-action: none;
 }
 .circle-outer {
   position: relative;
@@ -448,7 +469,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 25vh;
+  height: auto;
+  min-height: 160px;
   max-height: 220px;
   background: rgba(10, 12, 25, 0.97);
   border-radius: 16px 16px 0 0;
@@ -510,6 +532,34 @@ body {
   }
   .timer-container > #next-button {
     left: calc(100% + 4px);
+  }
+
+  /* Mobile: place Next button under the timer circle (not on the right). */
+  .timer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .timer-container > #next-button {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    margin: 12px 0 6px 0;
+  }
+
+  /* Bottom sheet modal: respect safe area and keep it pinned to viewport bottom. */
+  .milestone-modal,
+  .feedback-modal {
+    left: 0;
+    right: 0;
+    bottom: env(safe-area-inset-bottom, 0px);
+    width: 100%;
+    max-width: 100%;
+  }
+  .milestone-modal {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 
@@ -616,7 +666,6 @@ body {
   text-decoration: underline;
 }
 
-
 /* Short break typing animation (shown only in RUNNING short break, hidden in Settings) */
 .shortbreak-typing{
   margin: 0 auto 10px auto;
@@ -658,139 +707,60 @@ body {
   .shortbreak-typing .cursor{ animation: none; }
 }
 
-
-/* Short break stars overlay (only in short break; synced via JS) */
-.shortbreak-stars{
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50; /* above circle visuals, below controls */
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.shortbreak-stars.is-visible{ opacity: 1; }
-.shortbreak-stars.is-hidden{ opacity: 0 !important; }
-
-.shortbreak-stars .sb-star{
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.9);
-  opacity: 0.22;
-  transform: scale(0.9);
-  /* subtle idle shimmer */
-  animation: sbStarIdle 1.8s ease-in-out infinite;
-}
-
-@keyframes sbStarIdle{
-  0%, 100% { opacity: 0.18; transform: scale(0.85); }
-  50% { opacity: 0.32; transform: scale(1.0); }
-}
-
-.shortbreak-stars .sb-star.glint{
-  opacity: 1;
-  transform: scale(1.55);
-  filter: drop-shadow(0 0 6px rgba(255,255,255,0.95));
-}
-
-
 #timer-container{ position: relative; }
 
 
-/* Short break stars (glistening) */
-#timer-container{ position: relative; }
 
-.shortbreak-stars{
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  z-index: 60;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-.shortbreak-stars.is-visible{ opacity: 1; }
-.shortbreak-stars.is-hidden{ opacity: 0 !important; }
+/* -------------------------------------------------------------------------- */
+/* Responsive adjustments (mobile-first polish)                                */
+/* -------------------------------------------------------------------------- */
 
-.shortbreak-stars .sb-star{
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.85);
-  opacity: 0.35;
-  filter: drop-shadow(0 0 4px rgba(255,255,255,0.25));
-  animation: glowPulse var(--pulseDur) ease-in-out infinite;
-  animation-delay: var(--pulseDelay);
-  will-change: opacity, filter, transform;
-}
-
-.shortbreak-stars .sb-star::before,
-.shortbreak-stars .sb-star::after{
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--sparkLen);
-  height: 1px;
-  background: linear-gradient(to right,
-    rgba(255,255,255,0),
-    rgba(255,255,255,var(--sparkAlpha)),
-    rgba(255,255,255,0)
-  );
-  transform: translate(-50%, -50%) rotate(0deg);
-  opacity: 0;
-  animation: sparkle var(--sparkDur) ease-in-out infinite;
-  animation-delay: var(--sparkDelay);
-  filter: drop-shadow(0 0 6px rgba(255,255,255,0.35));
-  will-change: opacity, transform;
-}
-
-.shortbreak-stars .sb-star::after{
-  transform: translate(-50%, -50%) rotate(90deg);
-}
-
-@keyframes glowPulse{
-  0%, 100%{
-    opacity: 0.25;
-    transform: scale(1);
-    filter: drop-shadow(0 0 3px rgba(255,255,255,0.20));
+/* Improve readability and touch targets on small screens. */
+@media (max-width: 480px) {
+  body {
+    font-size: 15px;
+    /* On mobile, start layout from top to avoid large empty space and keep overlays aligned. */
+    align-items: flex-start;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+    height: 100svh; /* stable viewport height on mobile browsers */
   }
-  50%{
-    opacity: 0.75;
-    transform: scale(1.08);
-    filter: drop-shadow(0 0 10px rgba(255,255,255,0.40));
-  }
-}
 
-@keyframes sparkle{
-  0%, 78%, 100%{
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(0.9);
+  .timer-container {
+    height: min(380px, 100vw - 20px);
   }
-  82%{
-    opacity: 0.95;
-    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(1.15);
+
+  #helper-text {
+    font-size: 12px;
+    line-height: 1.25;
+    padding: 0 10px;
+    text-align: center;
   }
-  90%{
-    opacity: 0.25;
-    transform: translate(-50%, -50%) rotate(var(--sparkRot)) scale(1.0);
+
+  .top-buttons button,
+  .bottom-buttons button {
+    min-height: 44px; /* recommended touch size */
+    min-width: 44px;
   }
-}
 
-/* ===== Added for clean separation (moved from JS) ===== */
-/* Feedback modal: slide out to bottom on close */
-.feedback-modal.closing{
-  transform: translateY(100%);
-}
-/* Prevent scrollbars caused by stars slightly overflowing their container */
-.shortbreak-stars {
-  overflow: hidden;           /* clips stars at the edges */
-}
+  .settings-panel {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
 
-/* If your stars container is full-screen or positioned on body, this is the safety net */
-html, body {
-  overflow-x: hidden;         /* kills horizontal scrollbar */
-}
+  .settings-row input {
+    width: 76px;
+    padding: 6px 8px;
+    font-size: 14px;
+  }
 
-/* Optional: if you still see vertical scrollbars during the effect */
-body.shortbreak-stars-active {
-  overflow: hidden;           /* locks scrolling while stars are active */
+  .phase-settings-buttons button {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .slider-tooltip {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
 }

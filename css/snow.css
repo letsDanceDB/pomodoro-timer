@@ -1,0 +1,17 @@
+/**
+ * Long Break Snow Canvas
+ *
+ * Canvas overlay that displays snow particles during Long Break.
+ * Visibility is controlled by JS via opacity transition.
+ */
+#snow-canvas{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}

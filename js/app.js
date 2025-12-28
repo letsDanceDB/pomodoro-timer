@@ -1,3 +1,16 @@
+/**
+ * Pomidorro Timer — Main Application Logic
+ *
+ * This file owns the timer state machine and user interactions:
+ * - Start / Pause / Reset / Next
+ * - Phase building (Work / Short Break / Long Break)
+ * - Persistence of settings and lightweight stats
+ * - Wiring optional visual effects (snow / stars) via small adapter calls
+ *
+ * Tip for juniors:
+ * Treat this file as the “source of truth” for state. Other modules should be
+ * pure UI/effects helpers and must not change timer rules.
+ */
 
 // Global configuration constants for timer, circle, animation and themes
 const CONFIG = {
@@ -137,6 +150,11 @@ const helperText = document.getElementById('helper-text');
 const sliderTooltip = document.getElementById('slider-tooltip');
 let sliderTooltipTimeout = null;
 
+/**
+ * Show a small tooltip above a range/slider input with its current value.
+ * @param {any} message
+ * @param {any} durationMs
+ */
 function showSliderTooltip(message, durationMs) {
   if (!sliderTooltip) return;
   sliderTooltip.textContent = message;
@@ -185,6 +203,9 @@ const feedbackAnswers = {
   download_stats: null
 };
 
+/**
+ * Reset feedback survey UI to its initial state (no votes selected).
+ */
 function resetFeedbackSurveyUI() {
   // Reset in-memory answers
   feedbackAnswers.mobile_app = null;
@@ -205,6 +226,11 @@ function resetFeedbackSurveyUI() {
 }
 
 
+/**
+ * Send a lightweight analytics event (if analytics is enabled).
+ * @param {any} name
+ * @param {any} params
+ */
 function logAnalyticsEvent(name, params = {}) {
   // Real GA4 (gtag) event. Safe no-op if GA isn't loaded.
   if (typeof window.gtag !== 'function') return;
@@ -213,6 +239,9 @@ function logAnalyticsEvent(name, params = {}) {
   } catch (_) {}
 }
 
+/**
+ * Read persisted feedback answers from localStorage.
+ */
 function getFeedbackState() {
   if (!('localStorage' in window)) {
     return { shownCount: 0, lastShownAt: 0 };
@@ -233,6 +262,10 @@ function getFeedbackState() {
   }
 }
 
+/**
+ * Persist feedback answers to localStorage.
+ * @param {any} state
+ */
 function saveFeedbackState(state) {
   if (!('localStorage' in window)) return;
   try {
@@ -242,6 +275,9 @@ function saveFeedbackState(state) {
   }
 }
 
+/**
+ * Return the number of completed focus sets stored locally.
+ */
 function getSetsCompleted() {
   try {
     const raw = localStorage.getItem(FEEDBACK.SETS_KEY);
@@ -251,12 +287,18 @@ function getSetsCompleted() {
     return 0;
   }
 }
+/**
+ * Increase the completed focus sets counter by one and persist it.
+ */
 function incrementSetsCompleted() {
   const next = getSetsCompleted() + 1;
   try { localStorage.setItem(FEEDBACK.SETS_KEY, String(next)); } catch (_) {}
   return next;
 }
 
+/**
+ * Decide whether the feedback survey should be shown after a set.
+ */
 function shouldShowFeedbackSurvey() {
   // Show after 2nd set (2nd long break), even if long break was skipped.
   const sets = getSetsCompleted();
@@ -268,10 +310,16 @@ function shouldShowFeedbackSurvey() {
   return (Date.now() - lastShownAt) >= FEEDBACK.COOLDOWN_MS;
 }
 
+/**
+ * Persist that the feedback survey has been shown so it will not repeat.
+ */
 function markFeedbackShown() {
   saveFeedbackState({ lastShownAt: Date.now() });
 }
 
+/**
+ * Close feedback modal if user clicked outside or pressed escape (if wired).
+ */
 function maybeCloseFeedbackModal() {
   if (!feedbackModal) return;
   if (feedbackAnswers.mobile_app && feedbackAnswers.download_stats) {
@@ -283,6 +331,9 @@ function maybeCloseFeedbackModal() {
 }
 
 
+/**
+ * Ensure the “thanks” UI element exists inside the feedback modal.
+ */
 function ensureFeedbackThanksEl() {
   if (feedbackThanks) return feedbackThanks;
   try {
@@ -306,6 +357,10 @@ function ensureFeedbackThanksEl() {
   }
 }
 
+/**
+ * Hide the feedback survey modal and clean up state for the next run.
+ * @param {any} reason
+ */
 function closeFeedbackSurvey(reason) {
   if (!feedbackModal) return;
   feedbackModal.classList.add('closing');
@@ -320,6 +375,9 @@ function closeFeedbackSurvey(reason) {
   logAnalyticsEvent('feedback_survey_closed', { reason: reason || 'close' });
 }
 
+/**
+ * Open the feedback survey modal when eligibility rules are met.
+ */
 function openFeedbackSurveyIfEligible() {
   if (!feedbackModal) return;
   if (!shouldShowFeedbackSurvey()) return;
@@ -382,6 +440,10 @@ if (feedbackCloseBtn && feedbackModal) {
 const breakSound = document.getElementById('switch-sound');
 const settingsSound = document.getElementById('settings-sound');
 const skipSound = document.getElementById('skip-sound');
+/**
+ * Play a sound safely (respects mute, catches autoplay errors).
+ * @param {any} soundElement
+ */
 function safePlayAudio(soundElement) {
   if (!soundElement) return;
   try { if (soundElement.dataset && soundElement.dataset.missing === '1') return; } catch (_) {}
@@ -405,6 +467,9 @@ const backWhooshSound = document.getElementById('back-whoosh-sound');
 const crispClickSound = document.getElementById('click-crisp-sound');
 audioManager = new AudioManager({ workSound, breakSound, comboSound, workPauseSound, backWhooshSound, crispClickSound });
 
+/**
+ * Play the short break / transition sound.
+ */
 function playBreakSound() {
   if (!audioManager || !soundEnabled) return;
   audioManager.playBreakStart();
@@ -413,13 +478,22 @@ function playBreakSound() {
 
 
 
+/**
+ * Play a subtle UI click sound.
+ */
 function playCrispClick() { if (crispClickSound) safePlayAudio(crispClickSound); }
 
+/**
+ * Play the work-start sound.
+ */
 function playWorkSound() {
   if (!audioManager || !soundEnabled) return;
   audioManager.playWorkStart();
 }
 
+/**
+ * Play the work-pause sound.
+ */
 function playWorkPause() {
   if (!audioManager || !soundEnabled) return;
   audioManager.playWorkPause();
@@ -558,6 +632,10 @@ if (workInput) workInput.value = workMinutes;
 if (breakInput) breakInput.value = breakMinutes;
 if (longBreakInput) longBreakInput.value = longBreakMinutes;
 
+/**
+ * Clamp a minutes value to allowed min/max bounds.
+ * @param {any} v
+ */
 function clampMinutes(v) {
   if (isNaN(v)) return 1;
   if (v < 1) return 1;
@@ -565,6 +643,9 @@ function clampMinutes(v) {
   return v;
 }
 
+/**
+ * Build the ordered list of timer phases based on current settings.
+ */
 function buildPhases() {
   return [
     { type: 'work',      label: 'Work',       duration: workMinutes * 60 },
@@ -600,12 +681,20 @@ let clickTimeoutId = null;
 let settingsOpen = false;
 let draggingHandle = false;
 
+/**
+ * Format seconds as mm:ss for the timer display.
+ * @param {any} sec
+ */
 function formatTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
   const s = String(sec % 60).padStart(2, '0');
   return m + ':' + s;
 }
 
+/**
+ * Format seconds as h:mm:ss for longer durations (e.g., totals).
+ * @param {any} totalSec
+ */
 function formatHMS(totalSec) {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -615,6 +704,9 @@ function formatHMS(totalSec) {
          String(s).padStart(2, '0');
 }
 
+/**
+ * Update the “work done” / summary area based on accumulated stats.
+ */
 function updateWorkSummary() {
   if (!workSummaryEl) return;
   const timeStr = formatHMS(totalWorkSeconds);
@@ -622,6 +714,10 @@ function updateWorkSummary() {
     `Working session finished: ${completedWorkSessions} • skipped: ${skippedNotStartedWorkSessions} • not completed: ${skippedNotCompletedWorkSessions}`;
 }
 
+/**
+ * Update the small overlay labels in the settings panel (if present).
+ * @param {any} minutes
+ */
 function updateSettingsTimeOverlay(minutes) {
   if (!settingsOpen) return;
   const m = clampMinutes(minutes);
@@ -630,6 +726,9 @@ function updateSettingsTimeOverlay(minutes) {
   timeTarget.textContent = mm + ':00';
 }
 
+/**
+ * Trigger the background ripple animation to provide interaction feedback.
+ */
 function triggerRipple() {
   if (!ripple) return;
   ripple.classList.remove('ripple-animate');
@@ -638,108 +737,26 @@ function triggerRipple() {
 }
 
 
-// --- Snow effect for long break ---
-const snowCanvas = document.getElementById('snow-canvas');
-let snowCtx = null;
-let snowWidth = 0;
-let snowHeight = 0;
-let snowFlakes = [];
-let snowEnabled = false;
 
-if (snowCanvas) {
-  snowCtx = snowCanvas.getContext('2d');
-
-  function setSnowCanvasSize() {
-    const rect = snowCanvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-
-    snowWidth = rect.width;
-    snowHeight = rect.height;
-
-    snowCanvas.width = rect.width * dpr;
-    snowCanvas.height = rect.height * dpr;
-
-    snowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    initSnowFlakes();
+// --- Snow effect for long break (moved to js/snow.js) ---
+let setSnowEnabled = null;
+(function initSnowEffect(){
+  if (!window.SnowEffect) return;
+  const api = window.SnowEffect.init({ canvasId: 'snow-canvas' });
+  if (api && typeof api.setEnabled === 'function') {
+    setSnowEnabled = api.setEnabled;
   }
-
-  function createSnowFlake() {
-    const radius = 1 + Math.random() * 3.5;
-    return {
-      x: Math.random() * snowWidth,
-      y: Math.random() * snowHeight,
-      radius,
-      speedY: 0.7 + Math.random() * 2.2,
-      speedX: -0.6 + Math.random() * 1.2,
-      sway: Math.random() * 2 * Math.PI,
-      swaySpeed: 0.002 + Math.random() * 0.004,
-      opacity: 0.4 + Math.random() * 0.6
-    };
-  }
-
-  function initSnowFlakes() {
-    if (!snowWidth || !snowHeight) return;
-    const area = snowWidth * snowHeight;
-    const targetCount = Math.min(500, Math.max(150, Math.floor(area / 9000)));
-    snowFlakes = [];
-    for (let i = 0; i < targetCount; i++) {
-      snowFlakes.push(createSnowFlake());
-    }
-  }
-
-  function drawSnow() {
-    if (!snowWidth || !snowHeight) {
-      requestAnimationFrame(drawSnow);
-      return;
-    }
-
-    snowCtx.clearRect(0, 0, snowWidth, snowHeight);
-
-    if (snowEnabled) {
-      for (let flake of snowFlakes) {
-        flake.y += flake.speedY;
-        flake.sway += flake.swaySpeed;
-        flake.x += flake.speedX + Math.sin(flake.sway) * 0.5;
-
-        if (flake.y > snowHeight + flake.radius) {
-          flake.y = -flake.radius;
-          flake.x = Math.random() * snowWidth;
-        }
-        if (flake.x > snowWidth + flake.radius) flake.x = -flake.radius;
-        if (flake.x < -flake.radius) flake.x = snowWidth + flake.radius;
-
-        snowCtx.beginPath();
-        snowCtx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
-        snowCtx.fillStyle = `rgba(255, 255, 255, ${flake.opacity})`;
-        snowCtx.fill();
-      }
-    }
-
-    requestAnimationFrame(drawSnow);
-  }
-
-  function setSnowEnabled(enabled) {
-    snowEnabled = !!enabled;
-    snowCanvas.style.opacity = snowEnabled ? '1' : '0';
-  }
-
-  if (window.ResizeObserver) {
-    const snowRO = new ResizeObserver(() => {
-      setSnowCanvasSize();
-    });
-    snowRO.observe(snowCanvas);
-  } else {
-    window.addEventListener('resize', setSnowCanvasSize);
-  }
-
-  setSnowCanvasSize();
-  drawSnow();
-}
+})();
 
 
+
+/**
+ * Apply the base theme color for the current phase (cheap, CSS variable-based).
+ * @param {any} color
+ */
 function applyThemeColor(color) {
   if (!color) return;
-  document.body.style.background = color;
+  document.documentElement.style.setProperty('--phase-bg', color);
   innerFill.setAttribute('fill', color);
 
   let r, g, b;
@@ -806,7 +823,16 @@ function applyThemeColor(color) {
   }
 }
 
+/**
+ * Apply visuals for the given phase (colors, effects) without changing timer state.
+ * @param {any} phaseType
+ */
 function applyThemeForPhase(phaseType) {
+  // Set a cheap state marker for CSS-driven theming (fast; avoids inline gradient churn)
+  document.body.dataset.phase = phaseType;
+  // Special class only when long break uses the default (night-sky) theme.
+  const useDefaultLongBreakTheme = (phaseType === 'longBreak' && phaseColors.longBreak === defaultPhaseColor);
+  document.body.classList.toggle('default-longbreak', useDefaultLongBreakTheme);
   const colorKey = (phaseType === 'break') ? 'shortBreak' : phaseType;
   const color = phaseColors[colorKey] || defaultPhaseColor;
 
@@ -816,12 +842,7 @@ function applyThemeForPhase(phaseType) {
   // For long break, if the user has NOT customized the color, use the special night-sky gradient
   // and also apply a matching radial gradient inside the circle.
   // We detect "not customized" by checking if longBreak color is still the defaultPhaseColor.
-    
-    
-  
-  if (phaseType === 'longBreak' && phaseColors.longBreak === defaultPhaseColor) {
-    document.body.style.background =
-      'radial-gradient(circle at top, #1c3b70 0%, #050819 60%, #02040c 100%)';
+  if (useDefaultLongBreakTheme) {
     if (typeof innerFill !== 'undefined' && innerFill) {
       innerFill.setAttribute('fill', 'url(#inner-longbreak-gradient)');
     }
@@ -835,6 +856,9 @@ function applyThemeForPhase(phaseType) {
 
 }
 
+/**
+ * Update the Next button label to match the upcoming phase.
+ */
 function updateNextButtonLabel() {
   const nextIndex = (currentPhaseIndex + 1) % phases.length;
   const nextLabel = phases[nextIndex].label;
@@ -844,6 +868,9 @@ function updateNextButtonLabel() {
   }
 }
 
+/**
+ * Render all UI parts (time, labels, progress circle, buttons) from current state.
+ */
 function updateUI() {
   if (!settingsOpen) {
     const timeTarget = timeMain || timeOverlay;
@@ -881,10 +908,16 @@ const shortBreakTyping = {
   fullyShown: false,
 };
 
+/**
+ * Return the DOM element used for the short-break typing animation.
+ */
 function getShortBreakTypingEl() {
   return document.getElementById('shortbreak-typing');
 }
 
+/**
+ * Hide the short-break typing element (without destroying it).
+ */
 function hideShortBreakTyping() {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -892,6 +925,9 @@ function hideShortBreakTyping() {
   el.classList.add('is-hidden');
 }
 
+/**
+ * Show the short-break typing element.
+ */
 function showShortBreakTyping() {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -899,6 +935,10 @@ function showShortBreakTyping() {
   el.classList.add('is-visible');
 }
 
+/**
+ * Stop typing animation and reset any timers.
+ * @param {any} { clear
+ */
 function stopShortBreakTyping({ clear = true } = {}) {
   if (shortBreakTyping.timer) {
     clearTimeout(shortBreakTyping.timer);
@@ -918,6 +958,9 @@ function stopShortBreakTyping({ clear = true } = {}) {
   }
 }
 
+/**
+ * Make the full typed text visible immediately (no animation).
+ */
 function setShortBreakTypingFullVisible() {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -937,6 +980,9 @@ function setShortBreakTypingFullVisible() {
   if (textEl) textEl.textContent = SHORT_BREAK_TYPING_TEXT;
 }
 
+/**
+ * Start the short-break typing animation.
+ */
 function startShortBreakTyping() {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -998,153 +1044,57 @@ function startShortBreakTyping() {
 }
 
 
-// ---- Short break stars (16 random stars glisten every 0.5s, only when running) ----
-let sbStarsInterval = null;
 
-function ensureShortBreakStarsContainer() {
-  const timerContainer = document.getElementById('timer-container');
-  if (!timerContainer) return null;
-  // Ensure timer container is positioning context
-  try { if (getComputedStyle(timerContainer).position === 'static') timerContainer.style.position = 'relative'; } catch (_) {}
-  let c = document.getElementById('shortbreak-stars');
-  if (!c) {
-    c = document.createElement('div');
-    c.id = 'shortbreak-stars';
-    c.className = 'shortbreak-stars';
-    c.setAttribute('aria-hidden', 'true');
-    timerContainer.prepend(c);
-  }
-  return c;
-}
+// ---- Short break stars (glistening) moved to js/stars.js ----
+(function initShortBreakStars(){
+  if (!window.ShortBreakStars) return;
+  // stars.js returns a controller; we expose show/hide for app.js usage.
+  const controller = window.ShortBreakStars.init({
+    containerId: 'shortbreak-stars',
+    timerContainerId: 'timer-container'
+  });
+  if (controller && typeof controller.show === 'function') window.ShortBreakStars.show = controller.show;
+  if (controller && typeof controller.hide === 'function') window.ShortBreakStars.hide = controller.hide;
+    if (typeof controller.pause === 'function') window.ShortBreakStars.pause = controller.pause;
+})();
 
-function buildShortBreakStars() {
-  const c = ensureShortBreakStarsContainer();
-  if (!c) return;
-  if (c.dataset.ready === '1') return;
-  c.dataset.ready = '1';
-  c.innerHTML = '';
-  for (let i = 0; i < 16; i++) {
-    const s = document.createElement('span');
-    s.className = 'sb-star';
-    const x = Math.random() * 100;
-    const y = Math.random() * 100;
-    const size = 1.5 + Math.random() * 3.2;
-    s.style.left = x + '%';
-    s.style.top = y + '%';
-    s.style.width = size + 'px';
-    s.style.height = size + 'px';
-    s.style.animationDelay = (Math.random() * 800) + 'ms';
-    c.appendChild(s);
-  }
-}
-
+/**
+ * Stop the short-break stars effect and remove related classes.
+ */
 function stopShortBreakStars() {
-  if (sbStarsInterval) { clearInterval(sbStarsInterval); sbStarsInterval = null; }
-  const c = document.getElementById('shortbreak-stars');
-  if (!c) return;
-  c.classList.remove('is-visible');
+  try { window.ShortBreakStars && window.ShortBreakStars.hide(); } catch (_) {}
 }
 
-function startShortBreakStars() {
-  const c = ensureShortBreakStarsContainer();
-  if (!c) return;
-  buildShortBreakStars();
-  c.classList.add('is-visible');
-
-  if (sbStarsInterval) clearInterval(sbStarsInterval);
-  sbStarsInterval = setInterval(() => {
-    // Only glisten while RUNNING short break and not in settings
-    if (!currentPhase || currentPhase.type !== 'break') return;
-    if (!isRunning) return;
-    if (settingsOpen) return;
-
-    const stars = c.querySelectorAll('.sb-star');
-    if (!stars.length) return;
-    const star = stars[Math.floor(Math.random() * stars.length)];
-    star.classList.add('glint');
-    setTimeout(() => star.classList.remove('glint'), 220);
-  }, 500);
-}
-
-
-// ---- Short break stars (from glistening.html) ----
-let sbStarsBuilt = false;
-
-function sbStarsContainer() {
-  return document.getElementById('shortbreak-stars');
-}
-
-function sbBuildStars() {
-  const c = sbStarsContainer();
-  if (!c) return;
-  if (sbStarsBuilt) return;
-
-  const STAR_COUNT = 140;
-  const rand = (min, max) => min + Math.random() * (max - min);
-
-  c.innerHTML = '';
-  for (let i = 0; i < STAR_COUNT; i++) {
-    const s = document.createElement('div');
-    s.className = 'sb-star';
-
-    const size = rand(1.2, 2.8);
-    s.style.width = size + 'px';
-    s.style.height = size + 'px';
-
-    s.style.left = rand(0, 100) + '%';
-    s.style.top  = rand(0, 100) + '%';
-
-    s.style.setProperty('--pulseDur', rand(3.5, 9.0).toFixed(2) + 's');
-    s.style.setProperty('--pulseDelay', rand(0, 6.0).toFixed(2) + 's');
-
-    s.style.setProperty('--sparkDur', rand(5.5, 14.0).toFixed(2) + 's');
-    s.style.setProperty('--sparkDelay', rand(0, 10.0).toFixed(2) + 's');
-    s.style.setProperty('--sparkLen', rand(10, 26).toFixed(0) + 'px');
-    s.style.setProperty('--sparkAlpha', rand(0.35, 0.85).toFixed(2));
-    s.style.setProperty('--sparkRot', rand(-25, 25).toFixed(0) + 'deg');
-
-    s.style.opacity = rand(0.18, 0.45).toFixed(2);
-
-    c.appendChild(s);
-  }
-
-  sbStarsBuilt = true;
-}
-
-function sbShowStars() {
-  const c = sbStarsContainer();
-  if (!c) return;
-  sbBuildStars();
-  c.classList.remove('is-hidden');
-  c.classList.add('is-visible');
-}
-
-function sbHideStars() {
-  const c = sbStarsContainer();
-  if (!c) return;
-  c.classList.remove('is-visible');
-  c.classList.add('is-hidden');
-}
-
+/**
+ * Synchronize the stars effect with current app state (phase + running).
+ * @param {any} _reason
+ */
 function syncShortBreakStars(_reason) {
   // Hide inside settings always
   if (settingsOpen) {
-    sbHideStars();
+    stopShortBreakStars();
     return;
   }
 
   const inShortBreak = currentPhase && currentPhase.type === 'break';
   if (!inShortBreak) {
-    sbHideStars();
+    stopShortBreakStars();
     return;
   }
 
   // Active only in RUNNING mode (per requirement)
-  if (isRunning) sbShowStars();
-  else sbHideStars();
+  try {
+    if (isRunning) window.ShortBreakStars && window.ShortBreakStars.show();
+    else window.ShortBreakStars && window.ShortBreakStars.hide();
+  } catch (_) {}
 }
 
 
+
+/**
+ * Synchronize typing animation visibility with current short break state.
+ * @param {any} reason
+ */
 function syncShortBreakTyping(reason = "") {
   const el = getShortBreakTypingEl();
   if (!el) return;
@@ -1237,6 +1187,9 @@ function syncShortBreakTyping(reason = "") {
 
 
 
+/**
+ * Trigger the flip animation on the timer card (visual only).
+ */
 function triggerFlip() {
   if (animationManager) {
     animationManager.flip();
@@ -1249,6 +1202,9 @@ function triggerFlip() {
 
 
 
+/**
+ * Trigger a brief settings icon spin for tactile feedback.
+ */
 function triggerSettingsSpin() {
   if (animationManager) {
     animationManager.spinCircleOnce();
@@ -1260,6 +1216,9 @@ function triggerSettingsSpin() {
 }
 
 
+/**
+ * Start or resume the timer countdown loop.
+ */
 function startTimer() {
   if (isRunning || settingsOpen || milestonePendingReset) return;
 
@@ -1346,6 +1305,9 @@ function startTimer() {
   syncShortBreakStars('pause-resume');
 }
 
+/**
+ * Pause the timer countdown loop and persist the remaining time.
+ */
 function pauseTimer() {
   if (!isRunning && !intervalId) return;
 
@@ -1405,6 +1367,9 @@ function pauseTimer() {
   syncShortBreakTyping('pause-resume');
 }
 
+/**
+ * Reset the current phase to its full duration (does not change phase order).
+ */
 function resetCurrentPhase() {
   const _prevPhaseTypeForTyping = currentPhase ? currentPhase.type : null;
   pauseTimer();
@@ -1424,6 +1389,9 @@ function resetCurrentPhase() {
   updateUI();
 }
 
+/**
+ * Display the milestone/stats modal after completing a set.
+ */
 function showMilestoneModal() {
   timerState.setState(APP_STATE.MILESTONE);
   if (!milestoneModal) return;
@@ -1455,6 +1423,10 @@ function showMilestoneModal() {
   milestoneModal.classList.add('visible');
 }
 
+/**
+ * Finalize current phase stats, counters and any per-phase bookkeeping.
+ * @param {any} completed
+ */
 function finalizeCurrentPhase(completed) {
   if (currentPhase && currentPhase.type === 'work') {
     const rawSpent = currentPhase.duration - remaining;
@@ -1483,6 +1455,10 @@ function finalizeCurrentPhase(completed) {
   }
 }
 
+/**
+ * Update the small progress dots UI that show set/phase progress.
+ * @param {any} prevPhaseType
+ */
 function updateFocusDots(prevPhaseType) {
   if (!focusDots || focusDots.length === 0) return;
 
@@ -1553,6 +1529,9 @@ function updateFocusDots(prevPhaseType) {
   }
 }
 
+/**
+ * Animate the long-break dots indicator (visual only).
+ */
 function animateLongBreakDots() {
   if (!focusDots || focusDots.length === 0) return;
   if (currentPhase.type !== 'longBreak') return;
@@ -1565,6 +1544,11 @@ function animateLongBreakDots() {
   });
 }
 
+/**
+ * Advance the state machine to the next phase and schedule UI updates.
+ * @param {any} autoStart
+ * @param {any} completed
+ */
 function moveToNextPhase(autoStart, completed) {
   const _prevPhaseTypeForTyping = currentPhase ? currentPhase.type : null;
   const prevPhaseType = currentPhase.type;
@@ -1614,12 +1598,39 @@ function moveToNextPhase(autoStart, completed) {
   // All normal phase changes use flip only (no spin).
   // Exception: the special "Restart" of a full set (handled in the milestone modal)
   // triggers a flip + spin combo separately.
+  // If we are leaving short break, hide/pause stars immediately to avoid expensive paints overlapping with theme switch.
+  if (prevPhaseType === 'break' && window.ShortBreakStars) {
+    try {
+      if (typeof window.ShortBreakStars.pause === 'function') window.ShortBreakStars.pause();
+    } catch (e) {}
+  }
+
   triggerFlip();
 
-  applyThemeForPhase(currentPhase.type);
-  triggerRipple();
-  updateUI();
-  updateFocusDots(prevPhaseType);
+  // Defer heavier UI work to the next animation frame to improve INP and reduce perceived phase-switch lag.
+  // When leaving short break (stars), split into two frames: theme switch first, then remaining UI updates.
+  const _doUIUpdates = () => {
+    triggerRipple();
+    updateUI();
+    updateFocusDots(prevPhaseType);
+  };
+
+  if (prevPhaseType === 'break') {
+    requestAnimationFrame(() => {
+  // Finalize leaving Short Break: hide stars after pausing so the interaction stays responsive.
+  if (prevPhaseType === 'break' && window.ShortBreakStars && typeof window.ShortBreakStars.hide === 'function') {
+    try { window.ShortBreakStars.hide(); } catch (e) {}
+  }
+
+      applyThemeForPhase(currentPhase.type);
+      requestAnimationFrame(_doUIUpdates);
+    });
+  } else {
+    requestAnimationFrame(() => {
+      applyThemeForPhase(currentPhase.type);
+      _doUIUpdates();
+    });
+  }
 
   // Play transition sounds only if previous phase was running (autoStart)
   if (autoStart && soundEnabled) {
@@ -1642,6 +1653,9 @@ function moveToNextPhase(autoStart, completed) {
   }
 }
 
+/**
+ * Handle single-click actions (Start/Pause/Next) with debounce protection.
+ */
 function handleSingleClick() {
   if (settingsOpen || milestonePendingReset) return;
   if (isRunning) {
@@ -1696,6 +1710,10 @@ nextButton.addEventListener('click', (e) => {
   moveToNextPhase(wasRunning, false);
 });
 
+/**
+ * Convert a minutes value to a draggable handle position on the slider.
+ * @param {any} minutes
+ */
 function minutesToHandlePosition(minutes) {
   const m = clampMinutes(minutes);
   const visual = m % 60;
@@ -1708,6 +1726,10 @@ function minutesToHandlePosition(minutes) {
   durationHandle.setAttribute('cy', cy);
 }
 
+/**
+ * Update draft duration state while user drags the duration handle.
+ * @param {any} e
+ */
 function updateDraftDurationFromHandle(e) {
   const rect = svg.getBoundingClientRect();
   const x = (e.clientX - rect.left) * (300 / rect.width);
@@ -1756,28 +1778,55 @@ function updateDraftDurationFromHandle(e) {
   }
 }
 
-durationHandle.addEventListener('mousedown', (e) => {
+/**
+ * Enable dragging the duration handle in settings using Pointer Events.
+ *
+ * Why pointer events:
+ * - Works with mouse, touch, and pen with one implementation.
+ * - Enables pointer capture so the drag continues even if the finger leaves the handle.
+ *
+ * UX note:
+ * Some mobile browsers also fire a "click" after a drag. We suppress the click briefly
+ * after a drag ends to prevent accidental jumps.
+ */
+let lastDurationDragEndAt = 0;
+
+durationHandle.addEventListener('pointerdown', (e) => {
   if (!settingsOpen) return;
+
   draggingHandle = true;
   e.stopPropagation();
   e.preventDefault();
-});
 
-window.addEventListener('mousemove', (e) => {
-  if (!draggingHandle) return;
-  e.preventDefault();
+  // Keep receiving pointer events even if the pointer leaves the handle.
+  try {
+    durationHandle.setPointerCapture(e.pointerId);
+  } catch {
+    // Some browsers may throw if capture is not supported for this element.
+  }
+
   updateDraftDurationFromHandle(e);
 });
 
-window.addEventListener('mouseup', () => {
-  if (draggingHandle) {
-    draggingHandle = false;
-  }
-});
+window.addEventListener('pointermove', (e) => {
+  if (!settingsOpen) return;
+  if (!draggingHandle) return;
+  updateDraftDurationFromHandle(e);
+}, { passive: true });
+
+function endDurationHandleDrag() {
+  if (!draggingHandle) return;
+  draggingHandle = false;
+  lastDurationDragEndAt = Date.now();
+}
+
+window.addEventListener('pointerup', endDurationHandleDrag, { passive: true });
+window.addEventListener('pointercancel', endDurationHandleDrag, { passive: true });
 
 svg.addEventListener('click', (e) => {
   if (!settingsOpen) return;
   if (draggingHandle) return;
+  if (Date.now() - lastDurationDragEndAt < 250) return;
   e.stopPropagation();
   const rect = svg.getBoundingClientRect();
   const x = (e.clientX - rect.left) * (300 / rect.width);
@@ -1896,6 +1945,9 @@ settingsButton.addEventListener('click', (e) => {
 });
 
 
+/**
+ * Persist user settings to localStorage.
+ */
 function persistSettings() {
   if (!('localStorage' in window)) return;
   const payload = {
@@ -1911,6 +1963,9 @@ function persistSettings() {
   }
 }
 
+/**
+ * Apply settings to runtime state and refresh UI/effects accordingly.
+ */
 function applySettings() {
   workMinutes = Math.max(5, clampMinutes(draftDurations.work));
   breakMinutes = Math.max(CONFIG.TIMER.MIN_BREAK_MINUTES, Math.min(CONFIG.TIMER.MAX_BREAK_MINUTES, clampMinutes(draftDurations.shortBreak)));
@@ -2034,6 +2089,10 @@ if (phaseSettingsButtons) {
   }, { passive: false });
 }
 
+/**
+ * Convert a hex color string to an RGB object.
+ * @param {any} hex
+ */
 function hexToRgb(hex) {
   hex = hex.replace('#', '');
   if (hex.length === 3) {
@@ -2045,6 +2104,12 @@ function hexToRgb(hex) {
   return { r, g, b };
 }
 
+/**
+ * Linearly interpolate between two colors for smooth gradient transitions.
+ * @param {any} c1
+ * @param {any} c2
+ * @param {any} t
+ */
 function lerpColor(c1, c2, t) {
   const a = hexToRgb(c1);
   const b = hexToRgb(c2);
@@ -2086,7 +2151,7 @@ paletteSegments.forEach(seg => {
     return lerpColor(dark, light, t);
   }
 
-  seg.addEventListener('mousemove', (e) => {
+  seg.addEventListener('pointermove', (e) => {
     if (!settingsOpen) return;
     const color = getColorAtEvent(e);
     const svgCursor = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">

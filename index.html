@@ -26,11 +26,14 @@
   </script>
   
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/snow.css" />
+  <link rel="stylesheet" href="css/stars.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%0A%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22central%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%3E%F0%9F%8D%85%3C/text%3E%0A%3C/svg%3E" />
 
 </head>
 
 <body>
+  <!-- Long Break visual effect (canvas). Controlled by js/snow.js -->
   <canvas id="snow-canvas"></canvas>
   <header class="app-header">
     <h1 class="sr-only">Minimal Pomodoro Timer for Deep Work and Focus</h1>
@@ -199,7 +202,49 @@
   </div>
 
 
-  <div id="feedback-modal" class="feedback-modal">
+  
+<div id="feedback-modal" class="feedback-modal">
+    <div class="feedback-modal-content">
+      <button type="button" id="feedback-close-btn" class="feedback-close-btn" aria-label="Close">×</button>
+      <div class="feedback-modal-title">Quick feedback (5 sec) </div>
+      <div class="feedback-modal-text">
+      
+      </div>
+      <div class="feedback-question">
+        <span>Do you need a mobile app (iOS / Android)?</span>
+        <div class="feedback-options">
+          <button type="button" class="feedback-btn" data-question="mobile_app" data-answer="yes">👍</button>
+          <button type="button" class="feedback-btn" data-question="mobile_app" data-answer="no">👎</button>
+        </div>
+      </div>
+      <div class="feedback-question">
+        <span>Do you need statistics to download?</span>
+        <div class="feedback-options">
+          <button type="button" class="feedback-btn" data-question="download_stats" data-answer="yes">👍</button>
+          <button type="button" class="feedback-btn" data-question="download_stats" data-answer="no">👎</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  
+
+<div id="milestone-modal" class="milestone-modal">
+    <div class="milestone-modal-content">
+      <div class="milestone-modal-title">Good job!</div>
+      <div class="milestone-modal-text">
+        You have done a set, you can start again from the beginning.
+      </div>
+      <div id="work-summary" class="summary-text">
+      Working session finished: 0 &bull; skipped: 0 &bull; not completed: 0
+    </div>
+      <button id="milestone-ok-btn" class="milestone-modal-ok" type="button">OK</button>
+    </div>
+  </div>
+
+
+  
+<div id="feedback-modal" class="feedback-modal">
     <div class="feedback-modal-content">
       <button type="button" id="feedback-close-btn" class="feedback-close-btn" aria-label="Close">×</button>
       <div class="feedback-modal-title">Quick feedback (5 sec) </div>
@@ -232,7 +277,10 @@
     <audio id="back-whoosh-sound" src="assets/sounds/short_whoosh.mp3" preload="auto"></audio>
     <audio id="click-crisp-sound" src="assets/sounds/click_crisp.wav" preload="auto"></audio>
     </section>
-  </main>
+  </main>  <!-- Optional visual effects (keep timer logic in js/app.js) -->
+
+  <script src="js/snow.js"></script>
+  <script src="js/stars.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

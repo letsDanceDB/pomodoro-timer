@@ -1,0 +1,119 @@
+/**
+ * Short Break Stars (Sparkle Rays)
+ *
+ * This stylesheet defines the “glistening stars” overlay used during Short Break.
+ *
+ * Design goals:
+ * - Visual: subtle stars with occasional sparkle “rays”.
+ * - Performance: animate only opacity/transform to keep interactions responsive (good INP).
+ *
+ * Class contract (controlled by JS):
+ * - .shortbreak-stars.is-visible  -> stars shown and animating
+ * - .shortbreak-stars.is-hidden   -> stars hidden (opacity 0)
+ * - .shortbreak-stars.is-hiding   -> helper state to pause animations immediately on hide
+ */
+
+/* Overlay container sits above the background but below main UI */
+.shortbreak-stars{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  contain: layout paint style;
+  isolation: isolate;
+  will-change: opacity;
+  overflow: hidden;
+}
+
+.shortbreak-stars.is-visible{ opacity: 1; }
+.shortbreak-stars.is-hidden{ opacity: 0; }
+
+/* When hiding, we pause animations to reduce paint work during phase switch. */
+.shortbreak-stars.is-hiding .sb-star,
+.shortbreak-stars.is-hiding .sb-star::before,
+.shortbreak-stars.is-hiding .sb-star::after,
+.shortbreak-stars.is-hiding .sb-ray-diag{
+  animation-play-state: paused !important;
+}
+
+/**
+ * Single star dot.
+ * The “twinkle” effect is a short bright peak within a longer cycle.
+ */
+.shortbreak-stars .sb-star{
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.55);
+  opacity: var(--baseOpacity, 0.25);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  animation: sbTwinkle var(--twDur, 6s) ease-in-out infinite;
+  animation-delay: var(--twDelay, 0s);
+}
+
+/**
+ * Rays:
+ * - ::before: horizontal streak
+ * - ::after : vertical streak
+ * - .sb-ray-diag: diagonal streak (✦ sparkle feel)
+ *
+ * Note: We use gradients instead of blur/filter to keep it fast.
+ */
+.shortbreak-stars .sb-star::before,
+.shortbreak-stars .sb-star::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform: translate(-50%,-50%) scale(0.2);
+  opacity: 0;
+  will-change: transform, opacity;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0));
+  animation: sbRay var(--twDur, 6s) ease-in-out infinite;
+  animation-delay: var(--twDelay, 0s);
+}
+
+.shortbreak-stars .sb-star::before{
+  width: 18px;
+  height: 1px;
+}
+
+.shortbreak-stars .sb-star::after{
+  width: 1px;
+  height: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0));
+}
+
+.shortbreak-stars .sb-ray-diag{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width: 18px;
+  height: 1px;
+  transform: translate(-50%,-50%) rotate(45deg) scale(0.2);
+  opacity: 0;
+  will-change: transform, opacity;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.45), rgba(255,255,255,0));
+  animation: sbRayDiag var(--twDur, 6s) ease-in-out infinite;
+  animation-delay: var(--twDelay, 0s);
+}
+
+/* Twinkle: brief peak around ~88–92% of the cycle */
+@keyframes sbTwinkle{
+  0%, 82%, 100% { opacity: var(--baseOpacity, 0.25); transform: scale(1); }
+  90%           { opacity: calc(var(--baseOpacity, 0.25) + 0.55); transform: scale(1.35); }
+}
+
+/* Cross rays */
+@keyframes sbRay{
+  0%, 82%, 100% { opacity: 0; transform: translate(-50%,-50%) scale(0.2); }
+  90%           { opacity: 0.75; transform: translate(-50%,-50%) scale(1); }
+}
+
+/* Diagonal ray */
+@keyframes sbRayDiag{
+  0%, 82%, 100% { opacity: 0; transform: translate(-50%,-50%) rotate(45deg) scale(0.2); }
+  90%           { opacity: 0.55; transform: translate(-50%,-50%) rotate(45deg) scale(1); }
+}
