@@ -438,6 +438,7 @@ if (feedbackCloseBtn && feedbackModal) {
 }
 
 const breakSound = document.getElementById('switch-sound');
+const longBreakSound = document.getElementById('long-break-sound');
 const settingsSound = document.getElementById('settings-sound');
 const skipSound = document.getElementById('skip-sound');
 /**
@@ -474,6 +475,11 @@ function playBreakSound() {
   if (!audioManager || !soundEnabled) return;
   audioManager.playBreakStart();
  
+}
+
+function playLongBreakSound() {
+  if (!soundEnabled) return;
+  safePlayAudio(longBreakSound);
 }
 
 
@@ -513,6 +519,10 @@ if (soundToggle) {
         breakSound.pause();
         breakSound.currentTime = 0;
       }
+        if (longBreakSound) {
+            longBreakSound.pause();
+            longBreakSound.currentTime = 0;
+          }
       if (workSound) {
         workSound.pause();
         workSound.currentTime = 0;
@@ -625,6 +635,18 @@ let draftDurations = {
 restoreSettingsFromStorage();
 
 let colorTargetPhase = 'work';
+
+/**
+ * Normalize UI/storage phase keys so "break" always maps to "shortBreak".
+ * @param {string} phaseType
+ * @returns {string}
+ */
+function normalizePhaseKey(phaseType) {
+  if (phaseType === 'break') return 'shortBreak';
+  if (phaseType === 'shortBreak') return 'shortBreak';
+  if (phaseType === 'longBreak') return 'longBreak';
+  return 'work';
+}
 let wasRunningBeforeSettings = false;
 let phaseIndexBeforeSettings = 0;
 
@@ -648,13 +670,13 @@ function clampMinutes(v) {
  */
 function buildPhases() {
   return [
-    { type: 'work',      label: 'Work',       duration: workMinutes * 60 },
+    { type: 'work',      label: 'Focus',       duration: workMinutes * 60 },
     { type: 'break',     label: 'Break',      duration: breakMinutes * 60 },
-    { type: 'work',      label: 'Work',       duration: workMinutes * 60 },
+    { type: 'work',      label: 'Focus',       duration: workMinutes * 60 },
     { type: 'break',     label: 'Break',      duration: breakMinutes * 60 },
-    { type: 'work',      label: 'Work',       duration: workMinutes * 60 },
+    { type: 'work',      label: 'Focus',       duration: workMinutes * 60 },
     { type: 'break',     label: 'Break',      duration: breakMinutes * 60 },
-    { type: 'work',      label: 'Work',       duration: workMinutes * 60 },
+    { type: 'work',      label: 'Focus',       duration: workMinutes * 60 },
     { type: 'longBreak', label: 'Long Break', duration: longBreakMinutes * 60 },
   ];
 }
@@ -738,22 +760,52 @@ function triggerRipple() {
 
 
 
-// --- Snow effect for long break (moved to js/snow.js) ---
-let setSnowEnabled = null;
-(function initSnowEffect(){
-  if (!window.SnowEffect) return;
-  const api = window.SnowEffect.init({ canvasId: 'snow-canvas' });
-  if (api && typeof api.setEnabled === 'function') {
-    setSnowEnabled = api.setEnabled;
-  }
-})();
-
-
-
 /**
  * Apply the base theme color for the current phase (cheap, CSS variable-based).
  * @param {any} color
  */
+function applyForegroundTheme(fg, dark) {
+  const helperFg = dark ? '#e0e4ff' : '#333333';
+  const inactivePhaseBtnOpacity = dark ? '0.72' : '0.82';
+  const activePhaseBtnBg = dark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.10)';
+  const activePhaseBtnBorder = dark ? 'rgba(255, 255, 255, 0.92)' : 'rgba(21, 21, 21, 0.92)';
+
+  document.body.style.color = fg;
+  if (timeOverlay) timeOverlay.style.color = fg;
+  if (phaseLabelEl) phaseLabelEl.style.color = fg;
+  if (helperTextEl) helperTextEl.style.color = helperFg;
+
+  if (nextButton) {
+    nextButton.style.background = 'transparent';
+    nextButton.style.color = fg;
+  }
+  if (settingsButton) {
+    settingsButton.style.background = 'transparent';
+    settingsButton.style.color = fg;
+  }
+  if (backFromSettingsButton) {
+    backFromSettingsButton.style.background = 'transparent';
+    backFromSettingsButton.style.color = fg;
+  }
+  if (soundToggle) {
+    soundToggle.style.color = fg;
+    const iconPaths = soundToggle.querySelectorAll('svg path');
+    iconPaths.forEach((path) => path.setAttribute('stroke', fg));
+  }
+
+  if (phaseSettingsButtons) {
+    phaseSettingsButtons.style.color = fg;
+  }
+  if (phaseTabs && phaseTabs.length) {
+    phaseTabs.forEach((btn) => {
+      btn.style.color = fg;
+      btn.style.opacity = btn.classList.contains('active') ? '1' : inactivePhaseBtnOpacity;
+      btn.style.background = btn.classList.contains('active') ? activePhaseBtnBg : 'transparent';
+      btn.style.borderBottomColor = btn.classList.contains('active') ? activePhaseBtnBorder : 'transparent';
+    });
+  }
+}
+
 function applyThemeColor(color) {
   if (!color) return;
   document.documentElement.style.setProperty('--phase-bg', color);
@@ -775,56 +827,22 @@ function applyThemeColor(color) {
     }
   }
 
-  // Fallback: if parsing failed, assume dark background to keep text readable
+  // Fallback: if parsing failed, assume dark background to keep text readable.
+  // This also covers CSS gradients, which are not trivially parsed here.
   if (typeof r !== 'number' || typeof g !== 'number' || typeof b !== 'number') {
-    const fgFallback = '#f5f7ff';
-    document.body.style.color = fgFallback;
-    timeOverlay.style.color = fgFallback;
-    phaseLabelEl.style.color = fgFallback;
-    helperTextEl.style.color = '#e0e4ff';
-    nextButton.style.background = 'rgba(30,30,60,0.9)';
-    nextButton.style.color = '#f5f7ff';
-    settingsButton.style.background = nextButton.style.background;
-    settingsButton.style.color = fgFallback;
-    if (backFromSettingsButton) {
-      backFromSettingsButton.style.background = 'transparent';
-      backFromSettingsButton.style.color = fgFallback;
-    }
-    if (soundToggle) {
-      soundToggle.style.color = fgFallback;
-      const iconPaths = soundToggle.querySelectorAll('svg path');
-      iconPaths.forEach((p) => p.setAttribute('stroke', '#ffffff'));
-    }
+    applyForegroundTheme('#f5f7ff', true);
     return;
   }
 
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   const dark = luminance < 0.6;
   const fg = dark ? '#f5f7ff' : '#151515';
-
-  document.body.style.color = fg;
-  timeOverlay.style.color = fg;
-  phaseLabelEl.style.color = fg;
-  helperTextEl.style.color = dark ? '#e0e4ff' : '#333';
-  nextButton.style.background = dark ? 'rgba(30,30,60,0.9)' : 'rgba(30,30,60,0.8)';
-  nextButton.style.color = '#f5f7ff';
-  settingsButton.style.background = nextButton.style.background;
-  settingsButton.style.color = fg;
-
-  if (backFromSettingsButton) {
-    backFromSettingsButton.style.background = 'transparent';
-    backFromSettingsButton.style.color = fg;
-  }
-
-  if (soundToggle) {
-    soundToggle.style.color = fg;
-    const iconPaths = soundToggle.querySelectorAll('svg path');
-    iconPaths.forEach((p) => p.setAttribute('stroke', dark ? '#ffffff' : '#151515'));
-  }
+  applyForegroundTheme(fg, dark);
 }
 
 /**
  * Apply visuals for the given phase (colors, effects) without changing timer state.
+
  * @param {any} phaseType
  */
 function applyThemeForPhase(phaseType) {
@@ -848,12 +866,25 @@ function applyThemeForPhase(phaseType) {
     }
   }
 
-  // Snow is tied to long-break phase, not to a specific background color.
-  if (typeof setSnowEnabled === 'function') {
-    const enableSnow = (phaseType === 'longBreak' && !settingsOpen);
-    setSnowEnabled(enableSnow);
-  }
+  syncEasterOverlay();
 
+}
+
+function applySettingsPreviewTheme(phaseKey) {
+  const normalizedPhaseKey = normalizePhaseKey(phaseKey);
+  const previewColor = draftPhaseColors[normalizedPhaseKey] ?? defaultPhaseColor;
+  const useDefaultLongBreakPreview = (
+    normalizedPhaseKey === 'longBreak' && previewColor === defaultPhaseColor
+  );
+
+  document.body.dataset.phase = normalizedPhaseKey;
+  document.body.classList.toggle('default-longbreak', useDefaultLongBreakPreview);
+
+  applyThemeColor(previewColor);
+
+  if (useDefaultLongBreakPreview && innerFill) {
+    innerFill.setAttribute('fill', 'url(#inner-longbreak-gradient)');
+  }
 }
 
 /**
@@ -894,9 +925,9 @@ function updateUI() {
     applyThemeForPhase(currentPhase.type);
   }
 }
-
+const SHORT_BREAK_TYPING_TEXT = "Happy Easter!";
 // -------------------- Short break typing animation --------------------
-const SHORT_BREAK_TYPING_TEXT = "Merry Christmas and Happy New Year!";
+
 const SHORT_BREAK_TYPING_DURATION_MS = 6000;
 
 let shortBreakWasRunning = false;
@@ -1045,51 +1076,40 @@ function startShortBreakTyping() {
 
 
 
-// ---- Short break stars (glistening) moved to js/stars.js ----
-(function initShortBreakStars(){
-  if (!window.ShortBreakStars) return;
-  // stars.js returns a controller; we expose show/hide for app.js usage.
-  const controller = window.ShortBreakStars.init({
-    containerId: 'shortbreak-stars',
-    timerContainerId: 'timer-container'
-  });
-  if (controller && typeof controller.show === 'function') window.ShortBreakStars.show = controller.show;
-  if (controller && typeof controller.hide === 'function') window.ShortBreakStars.hide = controller.hide;
-    if (typeof controller.pause === 'function') window.ShortBreakStars.pause = controller.pause;
-})();
 
-/**
- * Stop the short-break stars effect and remove related classes.
- */
-function stopShortBreakStars() {
-  try { window.ShortBreakStars && window.ShortBreakStars.hide(); } catch (_) {}
+const easterOverlay = document.getElementById('easter-overlay');
+
+function showEasterOverlay() {
+  if (easterOverlay) easterOverlay.classList.add('is-visible');
 }
 
-/**
- * Synchronize the stars effect with current app state (phase + running).
- * @param {any} _reason
- */
-function syncShortBreakStars(_reason) {
-  // Hide inside settings always
+function hideEasterOverlay() {
+  if (easterOverlay) easterOverlay.classList.remove('is-visible');
+}
+
+function syncEasterOverlay() {
+  if (!easterOverlay) return;
+
   if (settingsOpen) {
-    stopShortBreakStars();
+    hideEasterOverlay();
     return;
   }
 
   const inShortBreak = currentPhase && currentPhase.type === 'break';
-  if (!inShortBreak) {
-    stopShortBreakStars();
+  const inLongBreak = currentPhase && currentPhase.type === 'longBreak';
+
+  if (inLongBreak && isRunning) {
+    showEasterOverlay();
     return;
   }
 
-  // Active only in RUNNING mode (per requirement)
-  try {
-    if (isRunning) window.ShortBreakStars && window.ShortBreakStars.show();
-    else window.ShortBreakStars && window.ShortBreakStars.hide();
-  } catch (_) {}
+  if (inShortBreak && isRunning) {
+    showEasterOverlay();
+    return;
+  }
+
+  hideEasterOverlay();
 }
-
-
 
 /**
  * Synchronize typing animation visibility with current short break state.
@@ -1239,8 +1259,10 @@ function startTimer() {
     } else if (!isResume && !suppressNextStartSound) {
       if (currentPhase.type === 'work') {
         playWorkSound();
-      } else if (currentPhase.type === 'break' || currentPhase.type === 'longBreak') {
+      } else if (currentPhase.type === 'break') {
         playBreakSound();
+      } else if (currentPhase.type === 'longBreak') {
+        playLongBreakSound();
       }
     }
   }
@@ -1269,7 +1291,7 @@ function startTimer() {
   updateUI();
   updateFocusDots(null);
   syncShortBreakTyping('start');
-  syncShortBreakStars('start');
+  syncEasterOverlay();
   if (currentPhase.type === 'longBreak') {
     animateLongBreakDots();
   }
@@ -1302,15 +1324,14 @@ function startTimer() {
     }
   }, 250);
   syncShortBreakTyping('pause-resume');
-  syncShortBreakStars('pause-resume');
+  syncEasterOverlay();
 }
 
 /**
  * Pause the timer countdown loop and persist the remaining time.
  */
 function pauseTimer() {
-  if (!isRunning && !intervalId) return;
-
+    if (!isRunning && !intervalId && !autoStartTimeoutId) return;
   // Recalculate remaining time based on the wall clock
   if (targetTimestamp != null) {
     const diff = targetTimestamp - Date.now();
@@ -1331,6 +1352,10 @@ function pauseTimer() {
   if (breakSound) {
     breakSound.pause();
     breakSound.currentTime = 0;
+  }
+  if (longBreakSound) {
+    longBreakSound.pause();
+    longBreakSound.currentTime = 0;
   }
   if (workSound) {
     workSound.pause();
@@ -1365,6 +1390,7 @@ function pauseTimer() {
   silentPause = false;
   timerState.setState(settingsOpen ? APP_STATE.SETTINGS : APP_STATE.PAUSED);
   syncShortBreakTyping('pause-resume');
+  syncEasterOverlay();
 }
 
 /**
@@ -1381,7 +1407,7 @@ function resetCurrentPhase() {
   currentPhase = phases[currentPhaseIndex];
   // Typing: disappear when leaving short break, (re)start only when running
   syncShortBreakTyping('reset');
-  syncShortBreakStars('reset');
+  syncEasterOverlay();
   totalSeconds = currentPhase.duration;
   remaining = totalSeconds;
   targetTimestamp = null;
@@ -1394,6 +1420,7 @@ function resetCurrentPhase() {
  */
 function showMilestoneModal() {
   timerState.setState(APP_STATE.MILESTONE);
+  hideEasterOverlay();
   if (!milestoneModal) return;
 
   if (milestoneModalTitle) {
@@ -1560,6 +1587,7 @@ function moveToNextPhase(autoStart, completed) {
     milestonePendingReset = true;
     // Stop timer and long-break animation, show all dots filled
     pauseTimer();
+    hideEasterOverlay();
     if (focusDots && focusDots.length) {
       focusDots.forEach(dot => {
         dot.classList.remove('longbreak', 'next');
@@ -1582,7 +1610,7 @@ function moveToNextPhase(autoStart, completed) {
   currentPhase = phases[currentPhaseIndex];
   // Typing: disappear when leaving short break, (re)start only when running
   syncShortBreakTyping('phase-change');
-  syncShortBreakStars('phase-change');
+  syncEasterOverlay();
   const newPhaseType = currentPhase.type;
 
   totalSeconds = currentPhase.duration;
@@ -1598,13 +1626,6 @@ function moveToNextPhase(autoStart, completed) {
   // All normal phase changes use flip only (no spin).
   // Exception: the special "Restart" of a full set (handled in the milestone modal)
   // triggers a flip + spin combo separately.
-  // If we are leaving short break, hide/pause stars immediately to avoid expensive paints overlapping with theme switch.
-  if (prevPhaseType === 'break' && window.ShortBreakStars) {
-    try {
-      if (typeof window.ShortBreakStars.pause === 'function') window.ShortBreakStars.pause();
-    } catch (e) {}
-  }
-
   triggerFlip();
 
   // Defer heavier UI work to the next animation frame to improve INP and reduce perceived phase-switch lag.
@@ -1613,15 +1634,11 @@ function moveToNextPhase(autoStart, completed) {
     triggerRipple();
     updateUI();
     updateFocusDots(prevPhaseType);
+    syncEasterOverlay();
   };
 
   if (prevPhaseType === 'break') {
     requestAnimationFrame(() => {
-  // Finalize leaving Short Break: hide stars after pausing so the interaction stays responsive.
-  if (prevPhaseType === 'break' && window.ShortBreakStars && typeof window.ShortBreakStars.hide === 'function') {
-    try { window.ShortBreakStars.hide(); } catch (e) {}
-  }
-
       applyThemeForPhase(currentPhase.type);
       requestAnimationFrame(_doUIUpdates);
     });
@@ -1633,13 +1650,15 @@ function moveToNextPhase(autoStart, completed) {
   }
 
   // Play transition sounds only if previous phase was running (autoStart)
-  if (autoStart && soundEnabled) {
-    if (prevPhaseType === 'work' && (newPhaseType === 'break' || newPhaseType === 'longBreak')) {
-      playBreakSound();
-    } else if ((prevPhaseType === 'break' || prevPhaseType === 'longBreak') && newPhaseType === 'work') {
-      playWorkSound();
+    if (autoStart && soundEnabled) {
+      if (prevPhaseType === 'work' && newPhaseType === 'break') {
+        playBreakSound();
+      } else if (prevPhaseType === 'work' && newPhaseType === 'longBreak') {
+        playLongBreakSound();
+      } else if ((prevPhaseType === 'break' || prevPhaseType === 'longBreak') && newPhaseType === 'work') {
+        playWorkSound();
+      }
     }
-  }
 
   suppressNextStartSound = !!autoStart;
   if (autoStart) {
@@ -1898,14 +1917,11 @@ settingsButton.addEventListener('click', (e) => {
   settingsOpen = true;
   // Hide short break effects while in settings
   hideShortBreakTyping();
-  stopShortBreakStars();
+  hideEasterOverlay();
   wasRunningBeforeSettings = isRunning;
   pauseTimer();
   triggerSettingsSpin();
   circleOuter.classList.add('settings-rotated');
-  if (typeof setSnowEnabled === 'function') {
-    setSnowEnabled(false);
-  }
   if (settingsPanel) settingsPanel.style.display = 'block';
   if (phaseSettingsButtons) phaseSettingsButtons.style.display = 'flex';
   if (backFromSettingsButton) backFromSettingsButton.style.display = 'inline-block';
@@ -1937,11 +1953,14 @@ settingsButton.addEventListener('click', (e) => {
   };
   draftPhaseColors = { ...phaseColors };
 
-  minutesToHandlePosition(draftDurations[colorTargetPhase]);
-  updateSettingsTimeOverlay(draftDurations[colorTargetPhase]);
+  document.body.classList.remove('default-longbreak');
 
-  const col = draftPhaseColors[colorTargetPhase] ?? defaultPhaseColor;
-  applyThemeColor(col);
+  const currentSettingsPhase = normalizePhaseKey(currentPhase.type);
+  const currentSettingsPhaseIndex = phaseTabs.findIndex((btn) => {
+    const phase = btn.getAttribute('data-phase') || 'work';
+    return normalizePhaseKey(phase) === currentSettingsPhase;
+  });
+  activateSettingsPhaseByIndex(currentSettingsPhaseIndex >= 0 ? currentSettingsPhaseIndex : 0);
 });
 
 
@@ -2018,6 +2037,7 @@ function applySettings() {
   updateFocusDots(null);
 
   applyThemeForPhase(currentPhase.type);
+  syncEasterOverlay();
   triggerRipple();
 
   if (wasRunningBeforeSettings) {
@@ -2029,7 +2049,7 @@ function applySettings() {
     short_break_minutes: breakMinutes,
     long_break_minutes: longBreakMinutes,
     color_work: phaseColors.work || null,
-    color_short_break: phaseColors.break || null,
+    color_short_break: phaseColors.shortBreak || null,
     color_long_break: phaseColors.longBreak || null
   });
   persistSettings();
@@ -2055,20 +2075,18 @@ if (activePhaseIndex < 0) activePhaseIndex = 0;
   activePhaseIndex = ((idx % count) + count) % count;
   const btn = phaseTabs[activePhaseIndex];
   const phase = btn.getAttribute('data-phase') || 'work';
-  const settingsPhaseKey = (phase === 'break') ? 'shortBreak' : phase;
+  const settingsPhaseKey = normalizePhaseKey(phase);
 
   colorTargetPhase = settingsPhaseKey;
 
-  phaseTabs.forEach(b => b.classList.remove('active'));
+  phaseTabs.forEach((button) => button.classList.remove('active'));
   btn.classList.add('active');
 
   if (settingsOpen) {
     minutesToHandlePosition(draftDurations[settingsPhaseKey]);
     updateSettingsTimeOverlay(draftDurations[settingsPhaseKey]);
-    const col = draftPhaseColors[settingsPhaseKey] ?? defaultPhaseColor;
-    applyThemeColor(col);
+    applySettingsPreviewTheme(settingsPhaseKey);
   }
-
 }
 
 phaseTabs.forEach((btn, idx) => {
@@ -2171,7 +2189,7 @@ paletteSegments.forEach(seg => {
 
     const color = getColorAtEvent(e);
     draftPhaseColors[colorTargetPhase] = color;
-    applyThemeColor(color);
+    applySettingsPreviewTheme(colorTargetPhase);
 
     paletteSegments.forEach(s => s.classList.remove('selected'));
     seg.classList.add('selected');
